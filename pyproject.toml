@@ -1,0 +1,46 @@
+[project]
+name = "btcfloor"
+version = "0.1.0"
+description = "Reproducible BTC floor, expectile, cycle timing, and forward-risk research toolkit"
+authors = [
+    { name = "arcamz", email = "hamza.archive@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+keywords = ["bitcoin", "btc", "power-law", "expectile", "quant", "cycle-analysis"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+    "matplotlib>=3.10.9",
+    "numpy>=2.4.6",
+    "pandas>=3.0.3",
+    "plotly>=6.7.0",
+    "requests>=2.34.2",
+    "tabulate>=0.10.0",
+]
+
+[project.scripts]
+btcfloor = "btcfloor.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/arcamz/btcfloor"
+Repository = "https://github.com/arcamz/btcfloor"
+Issues = "https://github.com/arcamz/btcfloor/issues"
+
+[build-system]
+requires = ["uv_build>=0.9.4,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
