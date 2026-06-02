@@ -9,9 +9,12 @@ and reports under `data/` and `reports/`; both directories are ignored by git.
 uv run btcfloor download
 ```
 
-The default source is the Coin Metrics community BTC CSV archive. The raw CSV
-is cached under `data/raw/` and normalized daily prices are written under
-`data/processed/`.
+The long-history source is the Coin Metrics community BTC CSV archive. If that
+file lags the current date, missing recent daily BTC/USD rows are appended from
+CoinGecko's public `market_chart/range` endpoint. The raw CSV is cached under
+`data/raw/` and normalized daily prices are written under `data/processed/`.
+Daily rows are UTC-dated, so local dates shortly after midnight can be ahead of
+the latest processed daily row.
 
 ## Run the full analysis
 
@@ -47,4 +50,3 @@ date,action,price_usd,reason
 ```
 
 Supported actions are `replace` and `drop`.
-

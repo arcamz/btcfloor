@@ -4,7 +4,14 @@ import numpy as np
 import pandas as pd
 
 from btcfloor.analysis import _build_current_bottom_summary, _build_model_evidence_summary
-from btcfloor.data import GENESIS_DATE, apply_price_fixes, to_weekly_close, to_weekly_ohlc
+from btcfloor.data import (
+    GENESIS_DATE,
+    append_missing_recent_market_prices,
+    apply_price_fixes,
+    normalize_coingecko_price_points,
+    to_weekly_close,
+    to_weekly_ohlc,
+)
 from btcfloor.expectile import (
     evaluate_bottom_expectile_sensitivity,
     expectile_model_name,
@@ -484,6 +491,56 @@ def test_apply_price_fixes_replaces_and_drops_rows() -> None:
     assert len(fixed) == 2
     assert fixed.loc[fixed["date"].eq(df["date"].iloc[0]), "price_usd"].iloc[0] == 123.0
     assert df["date"].iloc[1] not in set(fixed["date"])
+
+
+def test_normalize_coingecko_price_points_uses_last_tick_per_utc_day() -> None:
+    ticks = [
+        [pd.Timestamp("2026-06-01T00:05:00Z").timestamp() * 1000, 70_000.0],
+        [pd.Timestamp("2026-06-01T23:55:00Z").timestamp() * 1000, 69_000.0],
+        [pd.Timestamp("2026-06-02T12:00:00Z").timestamp() * 1000, 68_000.0],
+    ]
+
+    daily = normalize_coingecko_price_points(
+        ticks,
+        start_date=pd.Timestamp("2026-06-01"),
+        end_date=pd.Timestamp("2026-06-02"),
+    )
+
+    assert list(daily["date"]) == [
+        pd.Timestamp("2026-06-01"),
+        pd.Timestamp("2026-06-02"),
+    ]
+    assert list(daily["price_usd"]) == [69_000.0, 68_000.0]
+    assert set(daily["source"]) == {"coingecko_market_chart_range"}
+
+
+def test_append_missing_recent_market_prices_only_adds_after_base_end() -> None:
+    base = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2026-05-30", "2026-05-31"]),
+            "days_since_genesis": [6356, 6357],
+            "price_usd": [73_000.0, 72_000.0],
+            "source": ["coinmetrics_community_csv", "coinmetrics_community_csv"],
+        }
+    )
+    recent = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2026-05-31", "2026-06-01"]),
+            "days_since_genesis": [6357, 6358],
+            "price_usd": [71_500.0, 70_000.0],
+            "source": ["coingecko_market_chart_range", "coingecko_market_chart_range"],
+        }
+    )
+
+    combined = append_missing_recent_market_prices(base, recent)
+
+    assert list(combined["date"]) == [
+        pd.Timestamp("2026-05-30"),
+        pd.Timestamp("2026-05-31"),
+        pd.Timestamp("2026-06-01"),
+    ]
+    assert list(combined["price_usd"]) == [73_000.0, 72_000.0, 70_000.0]
+    assert combined.iloc[-1]["source"] == "coingecko_market_chart_range"
 
 
 def pytest_approx(value: float):

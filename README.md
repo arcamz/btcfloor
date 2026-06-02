@@ -88,13 +88,20 @@ Short version:
   `spot_today < floor(today + horizon)`.
 - Cycle timing is an explicit research assumption, not a forecast guarantee.
 
-## Data Source
+## Data Sources
 
-The default data source is the Coin Metrics community BTC CSV archive:
+The long-history source is the Coin Metrics community BTC CSV archive:
 
 ```text
 https://raw.githubusercontent.com/coinmetrics/data/master/csv/btc.csv
 ```
+
+If Coin Metrics lags the current date, the pipeline fills only the missing
+recent daily BTC/USD rows from CoinGecko's public `market_chart/range` endpoint.
+Generated `data_quality.md` reports the final source row counts.
+
+Daily rows are UTC-dated. Around a local midnight, the latest processed daily
+row may still be the prior local calendar date until a UTC-dated row exists.
 
 The raw and processed data files are generated locally and ignored by git.
 

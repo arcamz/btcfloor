@@ -11,6 +11,9 @@ from btcfloor.paths import ProjectPaths
 
 
 COINMETRICS_BTC_CSV_URL = "https://raw.githubusercontent.com/coinmetrics/data/master/csv/btc.csv"
+COINGECKO_BTC_MARKET_CHART_RANGE_URL = (
+    "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range"
+)
 GENESIS_DATE = pd.Timestamp("2009-01-03")
 PRICE_FIX_COLUMNS = ("date", "action", "price_usd", "reason")
 
@@ -26,6 +29,7 @@ class PriceQualityReport:
     zero_or_negative_rows: int
     configured_price_fix_rows: int
     applied_manual_price_rows: int
+    processed_source_counts: dict[str, int]
     missing_calendar_days: int
     suspicious_return_days: int
     suspicious_return_sample: pd.DataFrame
@@ -39,6 +43,10 @@ class PriceQualityReport:
             sample_md = sample.to_markdown(index=False)
         else:
             sample_md = "No daily absolute log returns above the diagnostic threshold."
+        source_counts_md = "\n".join(
+            f"  - {source}: {count:,}"
+            for source, count in sorted(self.processed_source_counts.items())
+        )
 
         return "\n".join(
             [
@@ -58,6 +66,8 @@ class PriceQualityReport:
                 f"- Zero or negative PriceUSD rows: {self.zero_or_negative_rows:,}",
                 f"- Configured manual price fix rows: {self.configured_price_fix_rows:,}",
                 f"- Applied manual replacement/insert rows: {self.applied_manual_price_rows:,}",
+                "- Processed source rows:",
+                source_counts_md,
                 f"- Missing calendar days inside valid range: {self.missing_calendar_days:,}",
                 (
                     "- Suspicious daily return rows "
@@ -82,6 +92,128 @@ def fetch_coinmetrics_btc_csv(
     response.raise_for_status()
     raw_path.write_bytes(response.content)
     return raw_path
+
+
+def _date_to_utc_epoch_seconds(date: pd.Timestamp) -> int:
+    normalized = pd.Timestamp(date).normalize()
+    return int(normalized.tz_localize("UTC").timestamp())
+
+
+def fetch_coingecko_recent_btc_prices(
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp | None = None,
+    url: str = COINGECKO_BTC_MARKET_CHART_RANGE_URL,
+    timeout_seconds: int = 45,
+) -> pd.DataFrame:
+    start = pd.Timestamp(start_date).normalize()
+    end = (
+        pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
+        if end_date is None
+        else pd.Timestamp(end_date).normalize()
+    )
+    if start > end:
+        return pd.DataFrame(columns=["date", "days_since_genesis", "price_usd", "source"])
+
+    params = {
+        "vs_currency": "usd",
+        "from": _date_to_utc_epoch_seconds(start),
+        "to": _date_to_utc_epoch_seconds(end + pd.Timedelta(days=1)),
+    }
+    response = requests.get(
+        url,
+        params=params,
+        headers={"User-Agent": "btcfloor/0.1"},
+        timeout=timeout_seconds,
+    )
+    response.raise_for_status()
+    return normalize_coingecko_price_points(response.json().get("prices", []), start, end)
+
+
+def normalize_coingecko_price_points(
+    prices: list[list[float]] | tuple[tuple[float, float], ...],
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+) -> pd.DataFrame:
+    if not prices:
+        return pd.DataFrame(columns=["date", "days_since_genesis", "price_usd", "source"])
+
+    ticks = pd.DataFrame(prices, columns=["timestamp_ms", "price_usd"])
+    ticks["timestamp"] = pd.to_datetime(
+        pd.to_numeric(ticks["timestamp_ms"], errors="coerce"),
+        unit="ms",
+        utc=True,
+        errors="coerce",
+    )
+    ticks["price_usd"] = pd.to_numeric(ticks["price_usd"], errors="coerce")
+    ticks = ticks.dropna(subset=["timestamp", "price_usd"])
+    ticks = ticks.loc[ticks["price_usd"] > 0].sort_values("timestamp")
+    if ticks.empty:
+        return pd.DataFrame(columns=["date", "days_since_genesis", "price_usd", "source"])
+
+    ticks["date"] = ticks["timestamp"].dt.tz_convert(None).dt.normalize()
+    start = pd.Timestamp(start_date).normalize()
+    end = pd.Timestamp(end_date).normalize()
+    ticks = ticks.loc[ticks["date"].between(start, end)].copy()
+    if ticks.empty:
+        return pd.DataFrame(columns=["date", "days_since_genesis", "price_usd", "source"])
+
+    daily = (
+        ticks.groupby("date", as_index=False)
+        .agg(price_usd=("price_usd", "last"))
+        .sort_values("date")
+        .reset_index(drop=True)
+    )
+    daily["days_since_genesis"] = (daily["date"] - GENESIS_DATE).dt.days
+    daily = daily.loc[daily["days_since_genesis"] > 0].copy()
+    daily["source"] = "coingecko_market_chart_range"
+    return daily.loc[:, ["date", "days_since_genesis", "price_usd", "source"]]
+
+
+def append_missing_recent_market_prices(
+    daily: pd.DataFrame,
+    recent: pd.DataFrame,
+) -> pd.DataFrame:
+    if recent.empty:
+        return daily.sort_values("date").reset_index(drop=True)
+
+    base = daily.copy()
+    base["date"] = pd.to_datetime(base["date"]).dt.normalize()
+    latest_base_date = base["date"].max()
+    additions = recent.loc[pd.to_datetime(recent["date"]).dt.normalize() > latest_base_date]
+    if additions.empty:
+        return base.sort_values("date").reset_index(drop=True)
+
+    combined = pd.concat([base, additions], ignore_index=True)
+    combined["date"] = pd.to_datetime(combined["date"]).dt.normalize()
+    combined["price_usd"] = pd.to_numeric(combined["price_usd"], errors="coerce")
+    combined = combined.dropna(subset=["date", "price_usd"])
+    combined = combined.loc[combined["price_usd"] > 0].copy()
+    combined["days_since_genesis"] = (combined["date"] - GENESIS_DATE).dt.days
+    combined = combined.loc[combined["days_since_genesis"] > 0].copy()
+    return combined.loc[:, ["date", "days_since_genesis", "price_usd", "source"]].sort_values(
+        "date"
+    ).reset_index(drop=True)
+
+
+def extend_processed_history_to_today(
+    processed_path: Path,
+    end_date: pd.Timestamp | None = None,
+) -> pd.DataFrame:
+    daily = load_price_history(processed_path)
+    latest_date = pd.Timestamp(daily["date"].max()).normalize()
+    target_date = (
+        pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
+        if end_date is None
+        else pd.Timestamp(end_date).normalize()
+    )
+    start_date = latest_date + pd.Timedelta(days=1)
+    if start_date > target_date:
+        return daily
+
+    recent = fetch_coingecko_recent_btc_prices(start_date, target_date)
+    extended = append_missing_recent_market_prices(daily, recent)
+    extended.to_csv(processed_path, index=False)
+    return extended
 
 
 def ensure_price_fixes_file(price_fixes_path: Path) -> Path:
@@ -211,7 +343,7 @@ def download_and_prepare(paths: ProjectPaths, force_download: bool = False) -> p
             paths.processed_btc_csv,
             price_fixes_path=paths.price_fixes_csv,
         )
-    return load_price_history(paths.processed_btc_csv)
+    return extend_processed_history_to_today(paths.processed_btc_csv)
 
 
 def validate_price_history(
@@ -235,6 +367,9 @@ def validate_price_history(
         .str.contains("manual_", regex=False)
         .sum()
     )
+    processed_source_counts = (
+        valid.get("source", pd.Series(dtype=str)).astype(str).value_counts().to_dict()
+    )
     full_index = pd.date_range(valid["date"].min(), valid["date"].max(), freq="D")
     missing_calendar_days = len(full_index.difference(pd.DatetimeIndex(valid["date"])))
 
@@ -254,6 +389,7 @@ def validate_price_history(
         zero_or_negative_rows=int(zero_or_negative.sum()),
         configured_price_fix_rows=configured_price_fix_rows,
         applied_manual_price_rows=applied_manual_price_rows,
+        processed_source_counts={str(k): int(v) for k, v in processed_source_counts.items()},
         missing_calendar_days=missing_calendar_days,
         suspicious_return_days=len(suspicious),
         suspicious_return_sample=suspicious.head(20),
@@ -307,7 +443,7 @@ def plot_price_diagnostics(
     fig, ax = plt.subplots(figsize=(12, 6))
     ax.plot(daily["date"], daily["price_usd"], linewidth=1.2)
     ax.set_yscale("log")
-    ax.set_title("BTC PriceUSD, Coin Metrics daily series")
+    ax.set_title("BTC PriceUSD, processed daily series")
     ax.set_xlabel("Date")
     ax.set_ylabel("USD, log scale")
     ax.grid(True, which="both", alpha=0.25)

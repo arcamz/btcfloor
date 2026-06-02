@@ -14,16 +14,6 @@ from btcfloor.paths import ProjectPaths
 from btcfloor.powerlaw import giovanni_power_law_floor_model
 
 
-RECENT_PROVISIONAL_PRICES = (
-    ("2026-05-24", 76_981.13),
-    ("2026-05-25", 77_279.93),
-    ("2026-05-26", 75_825.73),
-    ("2026-05-27", 74_344.70),
-    ("2026-05-28", 73_536.56),
-    ("2026-05-29", 73_283.13),
-    ("2026-05-30", 73_504.69),
-)
-
 BREACH_DATE = pd.Timestamp("2026-02-05")
 REJECTION_SEARCH_START = pd.Timestamp("2026-04-01")
 START_DATE = pd.Timestamp("2025-07-01")
@@ -31,18 +21,7 @@ START_DATE = pd.Timestamp("2025-07-01")
 
 def load_chart_prices(paths: ProjectPaths) -> pd.DataFrame:
     daily = pd.read_csv(paths.processed_btc_csv, parse_dates=["date"])
-    recent = pd.DataFrame(RECENT_PROVISIONAL_PRICES, columns=["date", "price_usd"])
-    recent["date"] = pd.to_datetime(recent["date"])
-    recent["days_since_genesis"] = (
-        recent["date"] - pd.Timestamp("2009-01-03")
-    ).dt.days
-    recent["source"] = "provisional_public_price"
-    combined = (
-        pd.concat([daily, recent], ignore_index=True)
-        .drop_duplicates("date", keep="last")
-        .sort_values("date")
-        .reset_index(drop=True)
-    )
+    combined = daily.sort_values("date").reset_index(drop=True)
     combined["sma50"] = combined["price_usd"].rolling(50).mean()
     combined["sma200"] = combined["price_usd"].rolling(200).mean()
     return combined
@@ -229,7 +208,7 @@ def write_plot(paths: ProjectPaths) -> Path:
     ax_state.yaxis.set_major_formatter(lambda value, _: f"{value:.0f}%")
     ax_state.set_title(
         f"Latest state as of {pd.Timestamp(latest['date']):%Y-%m-%d} "
-        f"(last point is provisional public spot)",
+        f"({latest['source']})",
         fontsize=12,
     )
     ax_state.grid(True, axis="y", alpha=0.22)
