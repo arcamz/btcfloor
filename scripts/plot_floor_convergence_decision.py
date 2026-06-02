@@ -129,6 +129,24 @@ def add_weekly_candles(ax: plt.Axes, weekly: pd.DataFrame) -> None:
         )
 
 
+def add_floor_corridors(
+    ax: plt.Axes,
+    plot_dates: pd.DatetimeIndex,
+    floor_by_model: dict[str, np.ndarray],
+) -> None:
+    hard = floor_by_model["giovanni_power_law_floor"]
+    e001 = floor_by_model["weekly_expectile_power_law_tau_0_0001"]
+    e01 = floor_by_model["weekly_expectile_power_law_tau_0_001"]
+    e1 = floor_by_model["weekly_expectile_power_law_tau_0_01"]
+    corridors = [
+        (hard, e001, "#d1fae5", 0.20),
+        (e001, e01, "#dbeafe", 0.16),
+        (e01, e1, "#fee2e2", 0.14),
+    ]
+    for lower, upper, color, alpha in corridors:
+        ax.fill_between(plot_dates, lower, upper, color=color, alpha=alpha, linewidth=0)
+
+
 def write_plot(paths: ProjectPaths) -> pd.DataFrame:
     daily = load_price_history(paths.processed_btc_csv)
     weekly = to_weekly_ohlc(daily)
@@ -174,6 +192,11 @@ def write_plot(paths: ProjectPaths) -> pd.DataFrame:
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
+    floor_by_model = {
+        model.name: model.predict_price(plot_dates, floor=True).astype(float)
+        for model in models
+    }
+    add_floor_corridors(ax, plot_dates, floor_by_model)
     add_weekly_candles(ax, candle_frame)
     if not candle_frame.empty:
         ax.text(
@@ -186,7 +209,14 @@ def write_plot(paths: ProjectPaths) -> pd.DataFrame:
             va="bottom",
         )
 
-    ax.axhline(spot_price, color="#111827", linewidth=2.0)
+    ax.plot(
+        [latest_date, expected_low_date],
+        [spot_price, spot_price],
+        color="#111827",
+        linewidth=2.5,
+        solid_capstyle="butt",
+        zorder=3,
+    )
     ax.text(
         latest_date + pd.Timedelta(days=3),
         spot_price + 270,
@@ -211,7 +241,7 @@ def write_plot(paths: ProjectPaths) -> pd.DataFrame:
 
     for model in models:
         color = colors[model.name]
-        floor = model.predict_price(plot_dates, floor=True).astype(float)
+        floor = floor_by_model[model.name]
         ax.plot(
             plot_dates,
             floor,
@@ -268,9 +298,27 @@ def write_plot(paths: ProjectPaths) -> pd.DataFrame:
 
     hard = metrics.loc[metrics["model"].eq("giovanni_power_law_floor")].iloc[0]
     hard_cross = pd.Timestamp(hard["floor_crosses_current_spot_date"])
+    hard_expected_low = float(hard["expected_low_floor_usd"])
+    ax.plot(
+        [latest_date, expected_low_date],
+        [hard_expected_low, hard_expected_low],
+        color="#111827",
+        linewidth=1.6,
+        solid_capstyle="butt",
+        alpha=0.9,
+        zorder=3,
+    )
+    ax.vlines(
+        latest_date,
+        float(hard["latest_floor_usd"]),
+        spot_price,
+        color="#111827",
+        linewidth=1.2,
+        alpha=0.9,
+    )
     ax.text(
         latest_date + pd.Timedelta(days=10),
-        float(hard["expected_low_floor_usd"]) - 900,
+        hard_expected_low - 900,
         f"Hard floor does not catch current spot before expected low\n"
         f"catch-up would be {hard_cross:%Y-%m-%d}",
         color="#7c2d12",
@@ -292,7 +340,7 @@ def write_plot(paths: ProjectPaths) -> pd.DataFrame:
     ax.text(
         latest_date,
         88_400,
-        "Floor convergence",
+        "Floor convergence: price now versus floors ahead",
         fontsize=18,
         color="#111827",
         ha="left",
