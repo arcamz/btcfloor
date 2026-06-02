@@ -10,6 +10,7 @@ from btcfloor.cycle import (
     DEFAULT_CYCLE_ANCHORS,
     FOURCHAN_FULL_LOW_TO_LOW_DAYS,
     FOURCHAN_LOW_TO_PEAK_DAYS,
+    current_cycle_phase,
 )
 from btcfloor.data import to_weekly_ohlc
 from btcfloor.powerlaw import PowerLawModel
@@ -227,6 +228,151 @@ def _add_cycle_aligned_panel(
     )
 
 
+def _add_expected_low_floor_markers(
+    fig: go.Figure,
+    models: list[PowerLawModel],
+    latest: pd.Series,
+) -> None:
+    latest_date = pd.Timestamp(latest["date"])
+    latest_price = float(latest["price_usd"])
+    phase = current_cycle_phase(latest_date)
+    expected_low_date = pd.Timestamp(phase["expected_next_low_date"])
+    if expected_low_date <= latest_date:
+        return
+
+    projected_dates = pd.date_range(latest_date, expected_low_date, freq="W-SUN")
+    if projected_dates.empty or projected_dates[-1] != expected_low_date:
+        projected_dates = projected_dates.append(pd.DatetimeIndex([expected_low_date]))
+
+    fig.add_vline(
+        x=expected_low_date,
+        line={"color": "#b22222", "width": 1.6, "dash": "dash"},
+        row=1,
+        col=1,
+    )
+    fig.add_vline(
+        x=expected_low_date,
+        line={"color": "#b22222", "width": 1.2, "dash": "dash"},
+        row=2,
+        col=1,
+    )
+
+    label_models = {
+        "giovanni_power_law_floor",
+        "weekly_expectile_power_law_tau_0_0001",
+        "weekly_expectile_power_law_tau_0_001",
+        "weekly_expectile_power_law_tau_0_01",
+    }
+    marker_rows = []
+    for model in models:
+        color = MODEL_COLORS.get(model.name, "#555555")
+        visible = True if model.name in label_models else "legendonly"
+        projection = model.predict_price(projected_dates, floor=True)
+        expected_floor = float(model.predict_price(expected_low_date, floor=True)[0])
+        marker_rows.append(
+            {
+                "model": model.name,
+                "label": _model_label(model),
+                "floor": expected_floor,
+                "color": color,
+            }
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=projected_dates,
+                y=projection,
+                mode="lines",
+                name=f"{_model_label(model)} to expected low",
+                legendgroup=model.name,
+                showlegend=False,
+                line={"width": 1.4, "color": color, "dash": "dot"},
+                visible=visible,
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}<br>Projected floor: %{y:$,.2f}"
+                    "<extra>%{fullData.name}</extra>"
+                ),
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[expected_low_date],
+                y=[expected_floor],
+                mode="markers+text",
+                name=f"{_model_label(model)} expected-low floor",
+                legendgroup=model.name,
+                showlegend=False,
+                marker={
+                    "symbol": "diamond",
+                    "size": 9,
+                    "color": color,
+                    "line": {"color": "white", "width": 1},
+                },
+                text=[f"${expected_floor / 1000:.1f}k"],
+                textposition="middle right",
+                textfont={"size": 10, "color": color},
+                visible=visible,
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}<br>Floor: %{y:$,.2f}"
+                    "<extra>%{fullData.name}</extra>"
+                ),
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[expected_low_date],
+                y=[latest_price / expected_floor],
+                mode="markers",
+                name=f"Current spot / {_model_label(model)} at expected low",
+                legendgroup=model.name,
+                showlegend=False,
+                marker={
+                    "symbol": "diamond",
+                    "size": 7,
+                    "color": color,
+                    "line": {"color": "white", "width": 1},
+                },
+                visible=visible,
+                hovertemplate=(
+                    "Current spot / expected-low floor: %{y:.2f}x"
+                    f"<br>Current spot: ${latest_price:,.2f}"
+                    "<extra>%{fullData.name}</extra>"
+                ),
+            ),
+            row=2,
+            col=1,
+        )
+
+    marker_frame = pd.DataFrame(marker_rows)
+    giovanni = marker_frame.loc[marker_frame["model"].eq("giovanni_power_law_floor")]
+    bottom_expectile = marker_frame.loc[
+        marker_frame["model"].eq("weekly_expectile_power_law_tau_0_0001")
+    ]
+    if not giovanni.empty and not bottom_expectile.empty:
+        fig.add_annotation(
+            x=expected_low_date,
+            y=float(bottom_expectile.iloc[0]["floor"]),
+            text=(
+                f"Expected low {expected_low_date:%Y-%m-%d}<br>"
+                f"Giovanni ${float(giovanni.iloc[0]['floor']) / 1000:.1f}k<br>"
+                f"0.01% exp. ${float(bottom_expectile.iloc[0]['floor']) / 1000:.1f}k"
+            ),
+            showarrow=True,
+            arrowhead=2,
+            ax=48,
+            ay=-58,
+            bgcolor="rgba(255,255,255,0.86)",
+            bordercolor="#d0d7de",
+            borderwidth=1,
+            font={"size": 11, "color": "#24324a"},
+            row=1,
+            col=1,
+        )
+
+
 def write_interactive_weekly_floor_chart(
     daily: pd.DataFrame,
     models: list[PowerLawModel],
@@ -409,6 +555,7 @@ def write_interactive_weekly_floor_chart(
     _add_cycle_calendar_guides(fig, pd.Timestamp(latest["date"]))
     _add_cycle_event_markers(fig, daily)
     _add_cycle_aligned_panel(fig, weekly, giovanni)
+    _add_expected_low_floor_markers(fig, models, latest)
 
     fig.add_hline(
         y=1.0,
