@@ -317,10 +317,10 @@ def write_plot(paths: ProjectPaths) -> pd.DataFrame:
         alpha=0.9,
     )
     ax.text(
-        latest_date + pd.Timedelta(days=10),
-        hard_expected_low - 900,
-        f"Hard floor does not catch current spot before expected low\n"
-        f"catch-up would be {hard_cross:%Y-%m-%d}",
+        latest_date + pd.Timedelta(days=12),
+        hard_expected_low - 3_000,
+        f"Hard floor nearly overlaps expected-low spot\n"
+        f"{money_k(hard_expected_low)} on {expected_low_date:%b %d}; catch-up {hard_cross:%Y-%m-%d}",
         color="#7c2d12",
         fontsize=9.5,
         va="top",
