@@ -568,7 +568,7 @@ def write_interactive_weekly_floor_chart(
         title={
             "text": (
                 "BTC Floor Variants And Cycle Distance"
-                f"<br><sup>Last daily close: {latest['date']:%Y-%m-%d}"
+                f"<br><sup>Latest processed daily row: {latest['date']:%Y-%m-%d}"
                 f" at ${float(latest['price_usd']):,.2f}</sup>"
             ),
             "x": 0.02,

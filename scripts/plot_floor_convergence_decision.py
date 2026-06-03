@@ -350,7 +350,7 @@ def write_plot(paths: ProjectPaths) -> pd.DataFrame:
         latest_date,
         87_100,
         (
-            f"Latest processed UTC daily close: {latest_date:%Y-%m-%d}. "
+            f"Latest processed UTC daily row: {latest_date:%Y-%m-%d}. "
             f"{days_to_low} days to expected bear-market low."
         ),
         fontsize=10,
