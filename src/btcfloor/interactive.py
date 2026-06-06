@@ -19,6 +19,7 @@ from btcfloor.validation import DEFAULT_CYCLE_LOWS
 
 MODEL_COLORS = {
     "giovanni_power_law_floor": "#d35400",
+    "burger_2019_ransac_1_5sigma_floor": "#111111",
     "weekly_expectile_power_law_tau_0_0001": "#1b9e77",
     "weekly_expectile_power_law_tau_0_0005": "#4daf4a",
     "weekly_expectile_power_law_tau_0_001": "#377eb8",
@@ -36,6 +37,8 @@ CYCLE_COLORS = {
 def _model_label(model: PowerLawModel) -> str:
     if model.name == "giovanni_power_law_floor":
         return "Giovanni fixed floor"
+    if model.name.startswith("burger_2019_ransac"):
+        return "Burger 2019 RANSAC support"
     if "expectile" in model.name:
         tau_text = model.name.removeprefix("weekly_expectile_power_law_tau_")
         tau_text = tau_text.replace("_", ".")
@@ -259,6 +262,7 @@ def _add_expected_low_floor_markers(
 
     label_models = {
         "giovanni_power_law_floor",
+        "burger_2019_ransac_1_5sigma_floor",
         "weekly_expectile_power_law_tau_0_0001",
         "weekly_expectile_power_law_tau_0_001",
         "weekly_expectile_power_law_tau_0_01",
@@ -379,6 +383,15 @@ def write_interactive_weekly_floor_chart(
     output_path: Path,
 ) -> Path:
     weekly = to_weekly_ohlc(daily)
+    sma_daily = daily.loc[:, ["date", "price_usd"]].sort_values("date").copy()
+    sma_daily["sma200"] = sma_daily["price_usd"].rolling(200).mean()
+    sma_weekly = (
+        sma_daily.set_index("date")
+        .resample("W-SUN")
+        .last()
+        .dropna(subset=["sma200"])
+        .reset_index()
+    )
     giovanni = next(
         (model for model in models if model.name == "giovanni_power_law_floor"),
         None,
@@ -416,6 +429,18 @@ def write_interactive_weekly_floor_chart(
             hoverlabel={"namelength": -1},
         )
         ,
+        row=1,
+        col=1,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=sma_weekly["date"],
+            y=sma_weekly["sma200"],
+            mode="lines",
+            name="200-day SMA",
+            line={"width": 1.8, "color": "#6d28d9"},
+            hovertemplate="%{x|%Y-%m-%d}<br>200D SMA: %{y:$,.2f}<extra></extra>",
+        ),
         row=1,
         col=1,
     )
@@ -461,9 +486,14 @@ def write_interactive_weekly_floor_chart(
         floor = model.predict_price(weekly["date"], floor=True)
         label = _model_label(model)
         color = MODEL_COLORS.get(model.name, None)
-        width = 3.0 if model.name == "giovanni_power_law_floor" else 1.8
+        width = (
+            3.0
+            if model.name in {"giovanni_power_law_floor", "burger_2019_ransac_1_5sigma_floor"}
+            else 1.8
+        )
         opacity = 1.0 if model.name in {
             "giovanni_power_law_floor",
+            "burger_2019_ransac_1_5sigma_floor",
             "weekly_expectile_power_law_tau_0_0001",
         } else 0.78
         visible = (

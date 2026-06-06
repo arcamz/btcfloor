@@ -25,7 +25,11 @@ from btcfloor.forward_floor import (
 )
 from btcfloor.interactive import write_interactive_weekly_floor_chart
 from btcfloor.paths import ProjectPaths
-from btcfloor.powerlaw import fit_power_law_ols, giovanni_power_law_floor_model
+from btcfloor.powerlaw import (
+    fit_burger_2019_ransac_floor,
+    fit_power_law_ols,
+    giovanni_power_law_floor_model,
+)
 from btcfloor.risk import (
     ensemble_floor_risk_by_horizon,
     floor_distance_by_horizon,
@@ -407,21 +411,27 @@ def _model_role(model: str, walk_forward_row: pd.Series | None) -> tuple[int, st
             "fixed formula under review",
             "Fixed formula still needs review because walk-forward breaches appeared.",
         )
+    if model.startswith("burger_2019_ransac"):
+        return (
+            2,
+            "pre-2022 RANSAC support reference",
+            "Fit only on the 2010-2019 Burger window; useful provenance check, not a live refit.",
+        )
     if "expectile" in model:
         if breach_days > 0 or cycles_below > 0:
             return (
-                2,
+                3,
                 "adaptive bottom-pressure signal",
                 "Useful for proximity, but walk-forward breaches show it can chase recent lows.",
             )
         return (
-            2,
+            3,
             "adaptive floor candidate",
             "Adaptive fit has no walk-forward low-window breaches in this sample.",
         )
     if "ols" in model:
         return (
-            3,
+            4,
             "conservative stress floor",
             "Historically lower than cycle lows; useful as a deep-stress bound.",
         )
@@ -733,7 +743,7 @@ def _write_initial_report(
             "",
             f"- `{breach_details_path.as_posix()}`",
             "",
-            "## 4chan-Style Cycle Timing",
+            "## 1428-Day Cycle Timing",
             "",
             cycle_view.to_markdown(index=False),
             "",
@@ -744,9 +754,10 @@ def _write_initial_report(
             "## Notes",
             "",
             "- Giovanni's fixed power-law floor uses 1.0117e-17 * days^5.82 * 0.42.",
+            "- Burger 2019 RANSAC support uses the Sep 2019 vintage window, trims to the closest 50% of log-log observations, and plots a -1.5 inlier-sigma lower band.",
             "- The OLS floor is fit on daily Coin Metrics prices with a -2 sigma log10 floor.",
             "- The expectile floor uses weekly closes and tau 0.0001, which corresponds to 0.01%.",
-            "- The interactive chart excludes OLS to focus on Giovanni and expectile variants; OLS remains in tabular evidence as a conservative stress reference.",
+            "- The interactive chart excludes OLS to focus on Giovanni, Burger RANSAC, and expectile variants; OLS remains in tabular evidence as a conservative stress reference.",
             "- Stability rows with excluded cycles fit only on data through the selected cycle low cutoff and evaluate afterward.",
             "",
         ]
@@ -769,14 +780,16 @@ def run_initial_analysis(force_download: bool = False) -> dict[str, Path]:
     weekly = to_weekly_close(daily)
     ols = fit_power_law_ols(daily)
     giovanni = giovanni_power_law_floor_model()
+    burger_ransac = fit_burger_2019_ransac_floor(daily)
     expectile = fit_expectile_power_law(
         weekly,
         tau=0.0001,
         name=expectile_model_name(0.0001),
     )
-    models = [ols, giovanni, expectile]
+    models = [ols, giovanni, burger_ransac, expectile]
     interactive_models = [
         giovanni,
+        burger_ransac,
         expectile,
         *[
             fit_expectile_power_law(
@@ -866,6 +879,10 @@ def run_initial_analysis(force_download: bool = False) -> dict[str, Path]:
             WalkForwardFitSpec(
                 name="giovanni_power_law_floor",
                 fit_model=lambda frame: giovanni_power_law_floor_model(),
+            ),
+            WalkForwardFitSpec(
+                name="burger_2019_ransac_1_5sigma_floor",
+                fit_model=lambda frame: fit_burger_2019_ransac_floor(frame),
             ),
             WalkForwardFitSpec(
                 name=expectile_model_name(0.0001),

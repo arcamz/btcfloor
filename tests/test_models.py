@@ -24,9 +24,11 @@ from btcfloor.forward_floor import (
     group_future_floor_overlap_episodes,
 )
 from btcfloor.powerlaw import (
+    BURGER_2019_END_DATE,
     GIOVANNI_FLOOR_MULTIPLIER,
     GIOVANNI_POWER_LAW_EXPONENT,
     GIOVANNI_POWER_LAW_MULTIPLIER,
+    fit_burger_2019_ransac_floor,
     fit_power_law_ols,
     giovanni_power_law_floor_model,
 )
@@ -99,6 +101,28 @@ def test_giovanni_floor_uses_specified_formula_and_multiplier() -> None:
 
     assert trend == pytest_approx(expected_trend)
     assert floor / trend == pytest_approx(GIOVANNI_FLOOR_MULTIPLIER)
+
+
+def test_burger_2019_ransac_floor_ignores_post_vintage_rows() -> None:
+    df = synthetic_power_law_frame(intercept=-4.25, slope=2.75, start_day=560, n=3600)
+    vintage_model = fit_burger_2019_ransac_floor(df)
+
+    future = df.copy()
+    future.loc[len(future)] = {
+        "date": pd.Timestamp("2026-06-03"),
+        "days_since_genesis": (pd.Timestamp("2026-06-03") - GENESIS_DATE).days,
+        "price_usd": 1e12,
+        "source": "synthetic",
+    }
+    future_model = fit_burger_2019_ransac_floor(future)
+
+    assert vintage_model.fitted_to <= BURGER_2019_END_DATE
+    assert vintage_model.n_obs == future_model.n_obs
+    assert future_model.intercept == pytest_approx(vintage_model.intercept)
+    assert future_model.slope == pytest_approx(vintage_model.slope)
+    assert future_model.floor_offset_log10 == pytest_approx(
+        vintage_model.floor_offset_log10
+    )
 
 
 def test_giovanni_floor_crosses_60k_in_july_2026() -> None:

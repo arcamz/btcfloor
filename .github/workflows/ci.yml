@@ -19,4 +19,5 @@ jobs:
         run: uv sync --all-groups
       - name: Run tests
         run: uv run pytest -q
-
+      - name: Compile source and scripts
+        run: uv run python -m compileall src scripts

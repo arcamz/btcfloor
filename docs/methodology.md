@@ -15,6 +15,30 @@ This model is not fit to the local dataset, so it is useful as a fixed lower
 rail. Its main weakness is that it cannot adapt if future BTC market structure
 permanently changes.
 
+## Burger 2019 RANSAC support
+
+The Burger support reference is a pre-2022 provenance check based on Harold
+Christopher Burger's September 2019 power-law corridor work. The current
+snapshot always fits on the same vintage window:
+
+```text
+2010-07-17 <= date <= 2019-09-03
+```
+
+The approximation uses the article's robust-fit idea:
+
+```text
+y = log10(price_usd)
+x = log10(days_since_genesis)
+iteratively remove the largest absolute residual until 50% of rows remain
+fit y = a + b*x on retained rows
+floor = fitted line - 1.5 * retained-residual sigma
+```
+
+This line is not treated as an exact replication of Burger's chart. It is a
+reproducible, same-window RANSAC-style lower support reference that cannot be
+moved by the 2022 or 2026 lows.
+
 ## Weekly expectile floor
 
 The LuxAlgo-inspired approximation fits:
@@ -65,6 +89,78 @@ should therefore separate:
 
 A strong floor signal with price below key moving averages is best treated as a
 staged value/failed-breakdown setup, not as confirmed trend continuation.
+
+## Checkonchain cohort layer
+
+The on-chain cohort layer is pulled from Checkonchain's public static Plotly
+charts during `uv run scripts/update_daily.py`. The core cohort metrics are:
+
+- STH-MVRV and STH-MVRV Z-score: short-holder cost-basis stress.
+- STH price-equivalent Z-score bands: tactical stress zones around current spot.
+- LTH-MVRV and LTH-SOPR: long-holder unrealised and realised stress.
+- LTH realised loss in BTC, including 7D/28D EMAs: capitulation impulse.
+- Cointime Price: Checkonchain's cointime pricing model, added to the weekly
+  realised-price stress map as another low-zone cost-basis reference.
+- Classic CVDD: optional Bitbo API overlay when `BITBO_API_KEY` is configured;
+  otherwise fetched from Looknode's public classic-formula CVDD endpoint and
+  labelled as a third-party fallback. BGeometrics CVDD is intentionally not
+  used here because its documented current-supply normalization puts it on a
+  different tactical scale.
+
+These metrics do not define the power-law floor. They are used to decide
+whether the current floor-overlap zone is only "good value" or also shows the
+kind of long-holder capitulation often seen near final lows.
+
+## Metals relative-strength layer
+
+The metals layer is a separate swing-allocation context. It uses Yahoo Finance
+COMEX futures (`GC=F`, `SI=F`) for live gold/silver decision monitoring and
+calculates daily GSR:
+
+```text
+GSR = gold_price_usd_per_oz / silver_price_usd_per_oz
+```
+
+GSR is used as the primary gold-vs-silver switch measure because it directly
+answers whether silver is outperforming gold. The monitored levels are:
+
+- 60.0: initial silver rotation trigger.
+- 58.5: silver leadership confirmation.
+- 56.0: first silver outperformance target.
+- 53.0: strong silver outperformance target.
+- 48.0: aggressive silver catch-up target.
+
+Legacy LBMA series are retained only for long-history analog context. Raw gold
+and silver analog returns are useful context, but rotation should be based on
+live GSR breakdown plus silver price confirmation.
+
+## Interactive dashboards
+
+The main update command writes five HTML artifacts:
+
+```text
+reports/interactive/btc_floor_weekly.html
+reports/interactive/btc_market_dashboard.html
+reports/interactive/btc_roi_dashboard.html
+reports/interactive/metals_relative_dashboard.html
+reports/interactive/pipeline_health_dashboard.html
+```
+
+The weekly chart is the original floor/cycle Plotly view and now includes the
+200-day SMA. The market dashboard combines the price/floor/SMA view with
+zoomable Checkonchain STH/LTH panels. The ROI dashboard compares 1.0x and 1.5x
+exposure tables and includes a deployment decision matrix.
+
+The metals dashboard monitors live COMEX futures GSR for decisions, plus
+legacy LBMA gold/silver analog panels for historical context.
+
+The pipeline health dashboard reports source freshness, fallback status,
+required artifact freshness, and missing/stale outputs. It is an operations
+view, not an additional market model.
+
+Each dashboard includes regenerated agent commentary from the latest report
+data. Commentary should be treated as a quantitative status read, not as a
+separate model.
 
 ## Cycle timing
 

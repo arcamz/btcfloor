@@ -5,10 +5,20 @@
 - Prefer `uv add` / `uv remove` for dependency changes instead of editing dependency metadata by hand.
 - Run Python commands through `uv run` so they use the project-managed environment.
 - If a uv environment does not exist, create one with `uv venv` before installing or running Python dependencies.
-- To refresh market data and reports, run `uv run btcfloor analyze --force-download`.
+- To refresh market data, reports, tactical plots, Checkonchain cohort plots, metals/GSR plots, pipeline health, and interactive dashboards, run `uv run scripts/update_daily.py`.
+- For only the core floor analysis, run `uv run btcfloor analyze --force-download`.
 - The canonical long-history source is Coin Metrics. If Coin Metrics lags, the code appends only missing recent BTC/USD daily rows from CoinGecko.
 - Treat processed daily bars as UTC-dated. If Europe/Stockholm has rolled into a new calendar day before UTC has, do not fabricate a new daily close; report the latest processed UTC date.
 - Regenerate the tactical SMA/channel image with `uv run scripts/plot_sma_channel_decision.py` after refreshing analysis data.
-- Read `reports/current_bottom_summary.csv`, `reports/risk_role_based.csv`, `reports/forward_floor_overlap_episodes.csv`, and `reports/sma_channel_decision_metrics.csv` before giving market interpretation.
+- Regenerate Checkonchain cohort and LTH realised-loss charts with `uv run scripts/plot_checkonchain_cohorts.py` when only on-chain cohort charts need updating.
+- Regenerate only the HTML dashboards with `uv run scripts/build_interactive_dashboards.py` after source report CSVs already exist.
+- Regenerate only the metals relative-strength dashboard with `uv run scripts/build_metals_dashboard.py`.
+- Regenerate only the data/pipeline health dashboard with `uv run scripts/build_pipeline_health_dashboard.py`.
+- The primary dashboard entry points are `reports/interactive/btc_market_dashboard.html`, `reports/interactive/btc_roi_dashboard.html`, `reports/interactive/metals_relative_dashboard.html`, `reports/interactive/pipeline_health_dashboard.html`, and the original `reports/interactive/btc_floor_weekly.html`.
+- Read `reports/current_bottom_summary.csv`, `reports/risk_role_based.csv`, `reports/forward_floor_overlap_episodes.csv`, `reports/sma_channel_decision_metrics.csv`, `reports/checkonchain_cohort_summary.json`, and `reports/metals_relative_summary.json` before giving market interpretation.
 - Interpret the setup as two separate layers: floor/expectile pressure for value context, and SMA/channel/reclaim/SFP behavior for tactical timing.
+- Checkonchain Cointime Price is included in the weekly realised-price stress map. Classic CVDD uses Bitbo when `BITBO_API_KEY` is available and otherwise falls back to Looknode's public classic-formula CVDD API; label the fallback as `CVDD (Looknode fallback)` rather than plain canonical CVDD. Do not use BGeometrics CVDD for tactical floor charts because it is on a different normalization scale.
+- For metals allocation, use GSR as the primary gold-vs-silver switch tool: 60 is the initial silver rotation trigger, 58.5 is confirmation, and 56/53/48 are silver outperformance target zones.
+- For metals/GSR decisions, prefer current market data from Yahoo Finance COMEX futures (`GC=F`, `SI=F`). LBMA fixes are not preferred for live decisions and should only be treated as long-history analog context when no better historical source is wired in.
+- Dashboard commentary should be quantitative and regenerated from current report data, not handwritten static prose.
 - Generated `data/`, `reports/`, and `dist/` artifacts are intentionally ignored and should not be committed.
