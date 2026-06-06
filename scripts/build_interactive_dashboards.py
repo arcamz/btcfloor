@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import pandas as pd
@@ -25,6 +26,33 @@ CYCLE_LOW_WINDOWS = [
     ("2018 low", pd.Timestamp("2018-12-15"), "#5d6c7a"),
     ("2022 low", pd.Timestamp("2022-11-21"), "#b45f4d"),
 ]
+
+
+def _linear_range(values: pd.Series, pad_fraction: float = 0.08) -> list[float] | None:
+    finite = pd.to_numeric(values, errors="coerce").dropna()
+    if finite.empty:
+        return None
+    low = float(finite.min())
+    high = float(finite.max())
+    if math.isclose(low, high):
+        pad = abs(low) * pad_fraction or 1.0
+    else:
+        pad = (high - low) * pad_fraction
+    return [low - pad, high + pad]
+
+
+def _log_range(values: pd.Series, pad_fraction: float = 0.08) -> list[float] | None:
+    finite = pd.to_numeric(values, errors="coerce").dropna()
+    finite = finite[finite > 0]
+    if finite.empty:
+        return None
+    low = math.log10(float(finite.min()))
+    high = math.log10(float(finite.max()))
+    if math.isclose(low, high):
+        pad = 0.08
+    else:
+        pad = (high - low) * pad_fraction
+    return [low - pad, high + pad]
 
 
 def _money(value: float) -> str:
@@ -210,7 +238,7 @@ def _dashboard_shell(
     }}
     .weekly-frame {{
       width: 100%;
-      height: 1060px;
+      height: 1160px;
       border: 1px solid var(--line);
       border-radius: 4px;
       background: white;
@@ -495,8 +523,33 @@ def _build_weekly_realised_price_chart(
         margin={"l": 75, "r": 130, "t": 76, "b": 50},
         legend={"orientation": "h", "y": 1.04, "x": 0.01, "font": {"size": 10}},
     )
-    fig.update_yaxes(type="log", title_text="USD", tickprefix="$", row=1, col=1)
-    fig.update_yaxes(title_text="Ratio / z", row=2, col=1)
+    view_start = latest_date - pd.Timedelta(days=540)
+    view_end = latest_date + pd.Timedelta(days=95)
+    visible_weekly = weekly_price.loc[
+        weekly_price["date"].between(view_start, latest_date)
+    ]
+    price_values = [
+        visible_weekly[["low", "high"]].stack()
+        if not visible_weekly.empty
+        else pd.Series(dtype=float)
+    ]
+    visible_check = weekly_check.loc[
+        weekly_check["date"].between(view_start, latest_date)
+    ]
+    for column, *_ in price_lines:
+        if column in visible_check:
+            price_values.append(visible_check[column])
+    price_range = _log_range(pd.concat(price_values, ignore_index=True))
+
+    ratio_values = []
+    for column, *_ in ratio_lines:
+        if column in visible_check:
+            ratio_values.append(visible_check[column])
+    ratio_values.append(pd.Series([1.0, -1.0, 0.0]))
+    ratio_range = _linear_range(pd.concat(ratio_values, ignore_index=True))
+
+    fig.update_yaxes(type="log", title_text="USD", tickprefix="$", range=price_range, row=1, col=1)
+    fig.update_yaxes(title_text="Ratio / z", range=ratio_range, row=2, col=1)
     fig.update_xaxes(
         rangeselector={
             "buttons": [
@@ -512,7 +565,7 @@ def _build_weekly_realised_price_chart(
         col=1,
     )
     fig.update_xaxes(
-        range=[latest_date - pd.Timedelta(days=540), latest_date + pd.Timedelta(days=95)]
+        range=[view_start, view_end]
     )
     return _plotly_html(fig, 900)
 

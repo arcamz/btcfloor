@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,6 +53,19 @@ GSR_LEVELS = [
     (53.0, "Strong target"),
     (48.0, "Aggressive catch-up"),
 ]
+
+
+def _linear_range(values: pd.Series, pad_fraction: float = 0.08) -> list[float] | None:
+    finite = pd.to_numeric(values, errors="coerce").dropna()
+    if finite.empty:
+        return None
+    low = float(finite.min())
+    high = float(finite.max())
+    if math.isclose(low, high):
+        pad = abs(low) * pad_fraction or 1.0
+    else:
+        pad = (high - low) * pad_fraction
+    return [low - pad, high + pad]
 
 
 @dataclass(frozen=True)
@@ -783,6 +797,22 @@ def _gsr_state(gsr: float, sma20: float, sma50: float) -> str:
 
 def _make_gsr_chart(gsr: pd.DataFrame, source_label: str) -> go.Figure:
     latest = gsr.iloc[-1]
+    latest_date = pd.Timestamp(latest["date"])
+    view_start = max(latest_date - pd.Timedelta(days=365), gsr["date"].min())
+    view = gsr[gsr["date"] >= view_start].copy()
+    chart = gsr.copy()
+    chart["gold_view_100"] = float("nan")
+    chart["silver_view_100"] = float("nan")
+    if not view.empty:
+        base = view.iloc[0]
+        visible_mask = chart["date"] >= view_start
+        chart.loc[visible_mask, "gold_view_100"] = (
+            chart.loc[visible_mask, "gold_usd"] / float(base["gold_usd"]) * 100
+        )
+        chart.loc[visible_mask, "silver_view_100"] = (
+            chart.loc[visible_mask, "silver_usd"] / float(base["silver_usd"]) * 100
+        )
+
     fig = make_subplots(
         rows=2,
         cols=1,
@@ -791,11 +821,9 @@ def _make_gsr_chart(gsr: pd.DataFrame, source_label: str) -> go.Figure:
         row_heights=[0.72, 0.28],
         subplot_titles=[
             "Gold/silver ratio decision map",
-            f"Gold and silver indexed to 100 from the first shared {source_label} date",
+            f"Gold and silver indexed to 100 from the current view start ({view_start.date()})",
         ],
     )
-    view_start = pd.Timestamp("2024-01-01")
-    view = gsr[gsr["date"] >= view_start].copy()
     y_max = max(64.5, float(view["gsr"].max()) + 1.0)
 
     zones = [
@@ -863,8 +891,8 @@ def _make_gsr_chart(gsr: pd.DataFrame, source_label: str) -> go.Figure:
 
     fig.add_trace(
         go.Scatter(
-            x=gsr["date"],
-            y=gsr["gold_100"],
+            x=chart["date"],
+            y=chart["gold_view_100"],
             name="Gold indexed",
             line={"color": "#d97706", "width": 1.6},
             hovertemplate="%{x|%Y-%m-%d}<br>Gold index %{y:.1f}<extra></extra>",
@@ -874,8 +902,8 @@ def _make_gsr_chart(gsr: pd.DataFrame, source_label: str) -> go.Figure:
     )
     fig.add_trace(
         go.Scatter(
-            x=gsr["date"],
-            y=gsr["silver_100"],
+            x=chart["date"],
+            y=chart["silver_view_100"],
             name="Silver indexed",
             line={"color": "#64748b", "width": 1.6},
             hovertemplate="%{x|%Y-%m-%d}<br>Silver index %{y:.1f}<extra></extra>",
@@ -925,9 +953,23 @@ def _make_gsr_chart(gsr: pd.DataFrame, source_label: str) -> go.Figure:
         row=1,
         col=1,
     )
-    fig.update_xaxes(range=[view_start, latest["date"] + pd.Timedelta(days=20)])
-    fig.update_yaxes(title_text="Gold / silver", row=1, col=1)
-    fig.update_yaxes(title_text="Index", row=2, col=1)
+    fig.update_xaxes(range=[view_start, latest_date + pd.Timedelta(days=20)])
+    gsr_range = _linear_range(
+        pd.concat(
+            [
+                view["gsr"],
+                view["gsr_sma20"],
+                view["gsr_sma50"],
+                pd.Series([48.0, 53.0, 56.0, 58.5, 60.0, 61.5]),
+            ],
+            ignore_index=True,
+        )
+    )
+    index_range = _linear_range(
+        chart.loc[chart["date"] >= view_start, ["gold_view_100", "silver_view_100"]].stack()
+    )
+    fig.update_yaxes(title_text="Gold / silver", range=gsr_range, row=1, col=1)
+    fig.update_yaxes(title_text="Index", range=index_range, row=2, col=1)
     return fig
 
 

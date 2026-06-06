@@ -66,6 +66,17 @@ Then open the primary dashboards:
 - `reports/interactive/metals_relative_dashboard.html`
 - `reports/interactive/pipeline_health_dashboard.html`
 
+For automated visual checks with the Codex Browser, serve the repo over local
+HTTP instead of using `file://`, because the Browser URL policy can block
+automation on local file tabs:
+
+```powershell
+uv run python -m http.server 8765 --bind 127.0.0.1 --directory C:\CodexProjects\btcfloor
+```
+
+Then open, for example,
+`http://127.0.0.1:8765/reports/interactive/btc_gold_rotation_dashboard.html`.
+
 Generate only the interactive weekly chart:
 
 ```powershell

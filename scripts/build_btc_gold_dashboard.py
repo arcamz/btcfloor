@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import pandas as pd
@@ -18,6 +19,19 @@ from build_metals_dashboard import (
     YAHOO_CHART_URL,
     _load_yahoo_futures,
 )
+
+
+def _linear_range(values: pd.Series, pad_fraction: float = 0.08) -> list[float] | None:
+    finite = pd.to_numeric(values, errors="coerce").dropna()
+    if finite.empty:
+        return None
+    low = float(finite.min())
+    high = float(finite.max())
+    if math.isclose(low, high):
+        pad = abs(low) * pad_fraction or 1.0
+    else:
+        pad = (high - low) * pad_fraction
+    return [low - pad, high + pad]
 
 
 def _money(value: float) -> str:
@@ -114,7 +128,7 @@ def _make_rotation_chart(
 ) -> go.Figure:
     latest = frame.iloc[-1]
     anchor_window = _normalised_since(frame, breach_date)
-    view_start = max(pd.Timestamp(latest["date"]) - pd.Timedelta(days=540), frame["date"].min())
+    view_start = max(pd.Timestamp(latest["date"]) - pd.Timedelta(days=365), frame["date"].min())
     fig = make_subplots(
         rows=3,
         cols=1,
@@ -238,10 +252,30 @@ def _make_rotation_chart(
         margin={"l": 74, "r": 36, "t": 82, "b": 48},
         legend={"orientation": "h", "y": 1.03, "x": 0.01, "font": {"size": 11}},
     )
-    fig.update_xaxes(range=[view_start, pd.Timestamp(latest["date"]) + pd.Timedelta(days=20)])
-    fig.update_yaxes(title_text="Gold oz / BTC", row=1, col=1)
-    fig.update_yaxes(title_text="Indexed to 100", row=2, col=1)
-    fig.update_yaxes(title_text="Multiple", row=3, col=1)
+    view_end = pd.Timestamp(latest["date"]) + pd.Timedelta(days=20)
+    visible = frame.loc[frame["date"].between(view_start, pd.Timestamp(latest["date"]))]
+    ratio_range = _linear_range(
+        visible[["btc_xau", "btc_xau_sma20", "btc_xau_sma50", "btc_xau_sma200"]].stack()
+    )
+    if not anchor_window.empty:
+        visible_anchor = anchor_window.loc[
+            anchor_window["date"].between(view_start, pd.Timestamp(latest["date"]))
+        ]
+        index_range = _linear_range(
+            visible_anchor[
+                ["btc_since_anchor", "gold_since_anchor", "relative_since_anchor"]
+            ].stack()
+        )
+    else:
+        index_range = None
+    floor_range = _linear_range(
+        pd.concat([visible["btc_to_giovanni_floor"], pd.Series([1.0, 1.1])], ignore_index=True)
+    )
+
+    fig.update_xaxes(range=[view_start, view_end])
+    fig.update_yaxes(title_text="Gold oz / BTC", range=ratio_range, row=1, col=1)
+    fig.update_yaxes(title_text="Indexed to 100", range=index_range, row=2, col=1)
+    fig.update_yaxes(title_text="Multiple", range=floor_range, row=3, col=1)
     fig.update_xaxes(title_text="Date", row=3, col=1)
     return fig
 
