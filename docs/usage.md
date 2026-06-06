@@ -18,17 +18,19 @@ This refreshes:
 - tactical SMA/channel and floor-convergence plots,
 - Checkonchain cohort and LTH realised-loss charts,
 - interactive BTC market and ROI dashboards,
-- metals/GSR data and the metals relative-strength dashboard.
+- metals/GSR data and the metals relative-strength dashboard,
+- BTC/gold rotation data and dashboard,
 - data/pipeline health status.
 
 Primary dashboard entry points:
 
 ```text
 reports/interactive/btc_market_dashboard.html
+reports/interactive/btc_floor_weekly.html
 reports/interactive/btc_roi_dashboard.html
+reports/interactive/btc_gold_rotation_dashboard.html
 reports/interactive/metals_relative_dashboard.html
 reports/interactive/pipeline_health_dashboard.html
-reports/interactive/btc_floor_weekly.html
 ```
 
 ## Focused commands
@@ -50,6 +52,7 @@ Regenerate only the dashboard HTML from existing report CSV/JSON files:
 ```powershell
 uv run scripts/build_interactive_dashboards.py
 uv run scripts/build_metals_dashboard.py
+uv run scripts/build_btc_gold_dashboard.py
 uv run scripts/build_pipeline_health_dashboard.py
 ```
 
@@ -72,6 +75,10 @@ dashboard labels the Looknode public endpoint as a third-party fallback.
 
 Metals/GSR uses Yahoo Finance COMEX futures (`GC=F`, `SI=F`) for live decision
 monitoring. LBMA fixes are kept only for long-history analog context.
+
+BTC/gold rotation uses processed BTC daily closes and Yahoo Finance COMEX gold
+futures (`GC=F`) on the latest shared trading date. The dashboard does not
+fabricate weekend gold closes.
 
 ## Price fixes
 

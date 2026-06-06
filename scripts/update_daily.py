@@ -4,6 +4,7 @@ from pathlib import Path
 
 from btcfloor.analysis import run_initial_analysis
 from btcfloor.paths import ProjectPaths
+from build_btc_gold_dashboard import build_btc_gold_dashboard
 from build_interactive_dashboards import build_dashboards
 from build_metals_dashboard import build_metals_dashboard
 from build_pipeline_health_dashboard import build_pipeline_health_dashboard
@@ -53,6 +54,9 @@ def main() -> None:
 
     metals_outputs = build_metals_dashboard(paths)
     _print_outputs("metals dashboard", metals_outputs)
+
+    btc_gold_outputs = build_btc_gold_dashboard(paths)
+    _print_outputs("btc/gold dashboard", btc_gold_outputs)
 
     health_outputs = build_pipeline_health_dashboard(paths)
     _print_outputs("pipeline health", health_outputs)

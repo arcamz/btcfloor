@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 import requests
 from plotly.subplots import make_subplots
 
+from btcfloor.dashboard_common import dashboard_nav, dashboard_nav_css
 from btcfloor.paths import ProjectPaths
 
 
@@ -987,13 +988,7 @@ def _shell(title: str, commentary: str, body: str) -> str:
       letter-spacing: 0;
       font-weight: 700;
     }}
-    nav a {{
-      color: var(--accent);
-      text-decoration: none;
-      font-weight: 650;
-      border-bottom: 1px solid var(--accent);
-      margin-left: 14px;
-    }}
+{dashboard_nav_css()}
     .commentary {{
       margin: 14px 28px 4px;
       padding: 12px 14px;
@@ -1040,11 +1035,7 @@ def _shell(title: str, commentary: str, body: str) -> str:
 <body>
   <header>
     <h1>{title}</h1>
-    <nav>
-      <a href="btc_market_dashboard.html">BTC market</a>
-      <a href="btc_roi_dashboard.html">BTC ROI</a>
-      <a href="pipeline_health_dashboard.html">Data health</a>
-    </nav>
+    {dashboard_nav("metals")}
   </header>
   <section class="commentary"><strong>Agent commentary:</strong> {commentary}</section>
   <main class="chart-wrap">{body}</main>

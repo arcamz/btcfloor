@@ -28,6 +28,8 @@ market data is kept out of git.
   regenerated agent commentary.
 - Interactive metals relative-strength dashboard with live COMEX futures GSR
   monitoring, rotation levels, and legacy long-history analog context.
+- Interactive BTC/gold rotation dashboard with daily and weekly BTC/XAU moving
+  average confirmation.
 - `uv`-managed package, CLI, tests, docs, CI workflow, and git hygiene.
 
 ## Quick Start
@@ -48,7 +50,8 @@ uv run btcfloor analyze
 
 For normal daily use, refresh the full local decision surface. This updates
 BTC market data, floor reports, tactical images, Checkonchain cohort data,
-metals/GSR data, pipeline health, and interactive dashboards:
+metals/GSR data, BTC/gold rotation data, pipeline health, and interactive
+dashboards:
 
 ```powershell
 uv run scripts/update_daily.py
@@ -57,10 +60,11 @@ uv run scripts/update_daily.py
 Then open the primary dashboards:
 
 - `reports/interactive/btc_market_dashboard.html`
+- `reports/interactive/btc_floor_weekly.html`
 - `reports/interactive/btc_roi_dashboard.html`
+- `reports/interactive/btc_gold_rotation_dashboard.html`
 - `reports/interactive/metals_relative_dashboard.html`
 - `reports/interactive/pipeline_health_dashboard.html`
-- `reports/interactive/btc_floor_weekly.html`
 
 Generate only the interactive weekly chart:
 
@@ -82,6 +86,7 @@ uv run btcfloor chart
 uv run scripts/update_daily.py
 uv run scripts/build_interactive_dashboards.py
 uv run scripts/build_metals_dashboard.py
+uv run scripts/build_btc_gold_dashboard.py
 uv run scripts/build_pipeline_health_dashboard.py
 ```
 
@@ -99,6 +104,7 @@ The full analysis creates local artifacts such as:
 - `reports/interactive/btc_floor_weekly.html`
 - `reports/interactive/btc_market_dashboard.html`
 - `reports/interactive/btc_roi_dashboard.html`
+- `reports/interactive/btc_gold_rotation_dashboard.html`
 - `reports/interactive/metals_relative_dashboard.html`
 - `reports/interactive/pipeline_health_dashboard.html`
 
@@ -153,6 +159,13 @@ The metals relative-strength dashboard uses Yahoo Finance COMEX futures
 gold-vs-silver rotation. LBMA gold/silver fixes are retained only for the
 legacy long-history analog panels until a better long-history metals source is
 wired in.
+
+The BTC/gold rotation dashboard combines the processed BTC daily series with
+Yahoo Finance COMEX gold futures (`GC=F`) and writes
+`data/processed/btc_gold_ratio_daily.csv`,
+`data/processed/btc_gold_ratio_weekly.csv`, and
+`reports/btc_gold_rotation_summary.json`. The ratio is close-to-close on the
+latest shared BTC/gold trading date; weekend gold prices are not fabricated.
 
 Daily rows are UTC-dated. Around a local midnight, the latest processed daily
 row may still be the prior local calendar date until a UTC-dated row exists.

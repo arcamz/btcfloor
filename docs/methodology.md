@@ -134,14 +134,37 @@ Legacy LBMA series are retained only for long-history analog context. Raw gold
 and silver analog returns are useful context, but rotation should be based on
 live GSR breakdown plus silver price confirmation.
 
+## BTC/gold rotation layer
+
+The BTC/gold dashboard answers a different allocation question:
+
+```text
+BTC/XAU = BTC_USD_close / gold_USD_close
+```
+
+This is the number of gold ounces one BTC buys. It is calculated on the latest
+shared BTC/gold trading date using processed BTC daily closes and Yahoo Finance
+COMEX gold futures (`GC=F`). Weekend gold closes are not fabricated.
+
+The intended read is:
+
+- Daily 20D reclaim: tactical BTC probe versus gold.
+- Daily 50D plus weekly 20W reclaim: stronger rotation evidence.
+- Daily 200D or weekly 50W reclaim: broader BTC/gold regime repair.
+
+This ratio does not replace the BTC floor model. It answers whether BTC is
+starting to outperform a gold parking position while BTC floor pressure is
+already elevated.
+
 ## Interactive dashboards
 
-The main update command writes five HTML artifacts:
+The main update command writes six HTML artifacts:
 
 ```text
 reports/interactive/btc_floor_weekly.html
 reports/interactive/btc_market_dashboard.html
 reports/interactive/btc_roi_dashboard.html
+reports/interactive/btc_gold_rotation_dashboard.html
 reports/interactive/metals_relative_dashboard.html
 reports/interactive/pipeline_health_dashboard.html
 ```
@@ -151,8 +174,9 @@ The weekly chart is the original floor/cycle Plotly view and now includes the
 zoomable Checkonchain STH/LTH panels. The ROI dashboard compares 1.0x and 1.5x
 exposure tables and includes a deployment decision matrix.
 
-The metals dashboard monitors live COMEX futures GSR for decisions, plus
-legacy LBMA gold/silver analog panels for historical context.
+The BTC/gold dashboard monitors relative BTC leadership versus gold. The metals
+dashboard monitors live COMEX futures GSR for decisions, plus legacy LBMA
+gold/silver analog panels for historical context.
 
 The pipeline health dashboard reports source freshness, fallback status,
 required artifact freshness, and missing/stale outputs. It is an operations

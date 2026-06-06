@@ -73,6 +73,7 @@ The project does not currently copy or vendor TradingView Pine Script source. Th
 - `reports/interactive/btc_floor_weekly.html`: weekly candle chart with floor overlays and 200-day SMA.
 - `reports/interactive/btc_market_dashboard.html`: Plotly market/on-chain dashboard with zoomable floor, SMA, STH, LTH, and realised-loss views.
 - `reports/interactive/btc_roi_dashboard.html`: Plotly ROI and deployment dashboard with 1.0x/1.5x exposure switches, downside/recovery geometry, and decision matrix.
+- `reports/interactive/btc_gold_rotation_dashboard.html`: Plotly BTC/XAU rotation dashboard with daily/weekly moving-average confirmation versus gold.
 - `reports/interactive/metals_relative_dashboard.html`: Plotly metals dashboard with live COMEX futures GSR rotation levels and legacy long-history analog context.
 - `reports/interactive/pipeline_health_dashboard.html`: data-source and generated-artifact health dashboard.
 
@@ -123,6 +124,27 @@ GSR is the primary gold-vs-silver switch variable. The dashboard marks:
 The gold and silver analog charts are context. LBMA is not the preferred live
 decision source. The allocation signal should be read through live GSR plus
 silver price confirmation, not raw silver upside alone.
+
+## BTC/Gold Rotation
+
+The BTC/gold dashboard uses processed BTC daily closes and Yahoo Finance COMEX
+gold futures (`GC=F`) to calculate:
+
+```text
+BTC/XAU = BTC_USD / gold_USD_per_oz
+```
+
+It writes:
+
+```text
+data/processed/btc_gold_ratio_daily.csv
+data/processed/btc_gold_ratio_weekly.csv
+reports/btc_gold_rotation_summary.json
+```
+
+The ratio is evaluated on the latest shared BTC/gold trading date. Daily 20D is
+treated as a tactical probe, daily 50D plus weekly 20W as stronger rotation
+evidence, and daily 200D or weekly 50W as broader BTC/gold regime repair.
 
 ## Dashboard Commentary
 

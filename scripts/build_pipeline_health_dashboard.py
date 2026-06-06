@@ -8,6 +8,7 @@ from typing import Any
 
 import pandas as pd
 
+from btcfloor.dashboard_common import dashboard_nav, dashboard_nav_css
 from btcfloor.paths import ProjectPaths
 
 
@@ -19,12 +20,14 @@ REQUIRED_REPORTS = [
     "sma_channel_decision_metrics.csv",
     "checkonchain_cohort_summary.json",
     "metals_relative_summary.json",
+    "btc_gold_rotation_summary.json",
 ]
 
 REQUIRED_INTERACTIVE = [
     "btc_floor_weekly.html",
     "btc_market_dashboard.html",
     "btc_roi_dashboard.html",
+    "btc_gold_rotation_dashboard.html",
     "metals_relative_dashboard.html",
     "pipeline_health_dashboard.html",
 ]
@@ -228,6 +231,29 @@ def _metals_items(paths: ProjectPaths, items: list[dict[str, Any]], today: pd.Ti
         )
 
 
+def _btc_gold_items(paths: ProjectPaths, items: list[dict[str, Any]], today: pd.Timestamp) -> None:
+    summary_path = paths.report_dir / "btc_gold_rotation_summary.json"
+    summary = _load_json(summary_path)
+    latest = summary.get("latest", {})
+    if not latest:
+        _add_item(items, "Data sources", "BTC/gold rotation", "missing", "BTC/gold summary JSON is missing or empty.", path=summary_path)
+        return
+
+    latest_date = _date(latest.get("shared_date"))
+    lag = None if latest_date is None else int((today - latest_date).days)
+    status = _status_for_lag_days(lag, ok_days=3, warn_days=5)
+    _add_item(
+        items,
+        "Data sources",
+        "BTC/gold rotation",
+        status,
+        "Uses the latest shared BTC/USD and COMEX gold futures trading date.",
+        source=summary.get("sources", {}).get("gold", {}).get("label"),
+        date=f"{latest_date:%Y-%m-%d}" if latest_date is not None else None,
+        path=summary_path,
+    )
+
+
 def _artifact_items(paths: ProjectPaths, items: list[dict[str, Any]]) -> None:
     for name in REQUIRED_REPORTS:
         path = paths.report_dir / name
@@ -278,6 +304,7 @@ def build_health_payload(paths: ProjectPaths) -> dict[str, Any]:
     _btc_items(paths, items, today)
     _checkonchain_items(paths, items, today)
     _metals_items(paths, items, today)
+    _btc_gold_items(paths, items, today)
     _artifact_items(paths, items)
     status_counts = pd.Series([item["status"] for item in items]).value_counts().to_dict()
     return {
@@ -397,18 +424,7 @@ def _html(payload: dict[str, Any]) -> str:
       letter-spacing: 0;
       font-weight: 700;
     }}
-    nav {{
-      display: flex;
-      gap: 14px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }}
-    nav a {{
-      color: var(--accent);
-      text-decoration: none;
-      font-weight: 650;
-      border-bottom: 1px solid var(--accent);
-    }}
+{dashboard_nav_css()}
     main {{
       padding: 18px 28px 32px;
       max-width: 1680px;
@@ -488,11 +504,7 @@ def _html(payload: dict[str, Any]) -> str:
 <body>
   <header>
     <h1>Data And Pipeline Health</h1>
-    <nav>
-      <a href="btc_market_dashboard.html">BTC market</a>
-      <a href="btc_roi_dashboard.html">BTC ROI</a>
-      <a href="metals_relative_dashboard.html">Metals</a>
-    </nav>
+    {dashboard_nav("health")}
   </header>
   <main>
     <div class="cards">{_summary_cards(payload)}</div>

@@ -12,6 +12,7 @@ from btcfloor.cycle import (
     FOURCHAN_LOW_TO_PEAK_DAYS,
     current_cycle_phase,
 )
+from btcfloor.dashboard_common import dashboard_nav, dashboard_nav_css
 from btcfloor.data import to_weekly_ohlc
 from btcfloor.powerlaw import PowerLawModel
 from btcfloor.validation import DEFAULT_CYCLE_LOWS
@@ -697,13 +698,63 @@ def write_interactive_weekly_floor_chart(
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.write_html(
-        output_path,
+    chart = fig.to_html(
         include_plotlyjs=True,
-        full_html=True,
-        auto_open=False,
+        full_html=False,
         config={"responsive": True},
         default_width="100%",
         default_height="1030px",
+    )
+    output_path.write_text(
+        f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BTC Floor Variants And Cycle Distance</title>
+  <style>
+    :root {{
+      --ink: #172033;
+      --muted: #5b6472;
+      --line: #d9dee7;
+      --band: #f7f9fc;
+      --accent: #155e75;
+    }}
+    body {{
+      margin: 0;
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background: white;
+    }}
+    header {{
+      padding: 16px 28px 9px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 18px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0;
+      font-weight: 700;
+    }}
+{dashboard_nav_css()}
+    main {{
+      padding: 0 10px 18px;
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>BTC Floor Variants And Cycle Distance</h1>
+    {dashboard_nav("floors")}
+  </header>
+  <main>{chart}</main>
+</body>
+</html>
+""",
+        encoding="utf-8",
     )
     return output_path

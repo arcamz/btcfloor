@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from btcfloor.cycle import current_cycle_phase
+from btcfloor.dashboard_common import dashboard_nav, dashboard_nav_css
 from btcfloor.data import load_price_history, to_weekly_ohlc
 from btcfloor.expectile import expectile_model_name, fit_expectile_power_law
 from btcfloor.forward_floor import future_floor_overlap_daily
@@ -129,8 +130,7 @@ def _dashboard_shell(
     title: str,
     commentary: str,
     body: str,
-    peer_link: str,
-    peer_label: str,
+    active_key: str,
 ) -> str:
     return f"""<!doctype html>
 <html lang="en">
@@ -166,18 +166,7 @@ def _dashboard_shell(
       letter-spacing: 0;
       font-weight: 700;
     }}
-    nav a {{
-      color: var(--accent);
-      text-decoration: none;
-      font-weight: 650;
-      border-bottom: 1px solid var(--accent);
-    }}
-    nav {{
-      display: flex;
-      gap: 14px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }}
+{dashboard_nav_css()}
     .commentary {{
       margin: 14px 28px 4px;
       padding: 12px 14px;
@@ -237,10 +226,7 @@ def _dashboard_shell(
 <body>
   <header>
     <h1>{title}</h1>
-    <nav>
-      <a href="{peer_link}">{peer_label}</a>
-      <a href="pipeline_health_dashboard.html">Data health</a>
-    </nav>
+    {dashboard_nav(active_key)}
   </header>
   <section class="commentary"><strong>Agent commentary:</strong> {commentary}</section>
   <main class="chart-wrap">{body}</main>
@@ -702,8 +688,7 @@ def build_market_dashboard(paths: ProjectPaths) -> Path:
             "BTC Market And On-Chain Dashboard",
             market_commentary,
             body,
-            "btc_roi_dashboard.html",
-            "Open ROI dashboard",
+            "market",
         ),
         encoding="utf-8",
     )
@@ -894,8 +879,7 @@ def build_roi_dashboard(paths: ProjectPaths) -> Path:
             "BTC ROI And Deployment Dashboard",
             roi_commentary,
             chart,
-            "btc_market_dashboard.html",
-            "Open market dashboard",
+            "roi",
         ),
         encoding="utf-8",
     )
