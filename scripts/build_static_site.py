@@ -129,15 +129,11 @@ def _health_counts_html(health: dict) -> str:
 def _public_path(path_value: object) -> str:
     if not path_value:
         return ""
-    try:
-        path = Path(str(path_value))
-    except (TypeError, ValueError):
-        return str(path_value)
-
-    parts = list(path.parts)
+    normalized = str(path_value).replace("\\", "/")
+    parts = [part for part in normalized.split("/") if part]
     if "reports" in parts:
         return "/".join(parts[parts.index("reports") :])
-    return path.name
+    return parts[-1] if parts else normalized
 
 
 def _health_rows_html(health: dict) -> str:
