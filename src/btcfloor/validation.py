@@ -22,6 +22,8 @@ DEFAULT_CYCLE_LOWS = (
     CycleLow("2022_low", pd.Timestamp("2022-11-21")),
 )
 
+FLOOR_RATIO_TOLERANCE = 1e-10
+
 
 @dataclass(frozen=True)
 class WalkForwardFitSpec:
@@ -34,6 +36,10 @@ def _nearest_daily_row(daily: pd.DataFrame, target_date: pd.Timestamp) -> pd.Ser
         raise ValueError("daily price frame is empty")
     distances = (daily["date"] - pd.Timestamp(target_date)).abs()
     return daily.loc[distances.idxmin()]
+
+
+def _is_below_floor(ratio: float | np.ndarray) -> bool | np.ndarray:
+    return ratio < (1.0 - FLOOR_RATIO_TOLERANCE)
 
 
 def evaluate_cycle_low_windows(
@@ -78,7 +84,7 @@ def evaluate_cycle_low_windows(
                     "observed_low_price_usd": float(low_row["price_usd"]),
                     "floor_at_observed_low_usd": low_floor,
                     "ratio_at_observed_low": low_ratio,
-                    "below_floor_at_observed_low": low_ratio < 1.0,
+                    "below_floor_at_observed_low": _is_below_floor(low_ratio),
                     "window_days": window_days,
                     "window_rows": len(window),
                     "min_ratio_date": pd.Timestamp(min_row["date"]),
@@ -88,7 +94,7 @@ def evaluate_cycle_low_windows(
                     "days_from_anchor_low_to_min_ratio": int(
                         (pd.Timestamp(min_row["date"]) - low_date).days
                     ),
-                    "breach_days_in_window": int(np.sum(ratio < 1.0)),
+                    "breach_days_in_window": int(np.sum(_is_below_floor(ratio))),
                 }
             )
 
@@ -119,7 +125,7 @@ def _evaluate_model_on_low_window(
         "observed_low_price_usd": float(low_row["price_usd"]),
         "floor_at_observed_low_usd": low_floor,
         "ratio_at_observed_low": low_ratio,
-        "below_floor_at_observed_low": low_ratio < 1.0,
+        "below_floor_at_observed_low": _is_below_floor(low_ratio),
         "window_days": window_days,
         "window_rows": len(window),
         "min_ratio_date": pd.Timestamp(min_row["date"]),
@@ -129,7 +135,7 @@ def _evaluate_model_on_low_window(
         "days_from_anchor_low_to_min_ratio": int(
             (pd.Timestamp(min_row["date"]) - low_date).days
         ),
-        "breach_days_in_window": int(np.sum(ratio < 1.0)),
+        "breach_days_in_window": int(np.sum(_is_below_floor(ratio))),
     }
 
 
