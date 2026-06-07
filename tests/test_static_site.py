@@ -38,7 +38,32 @@ def test_build_static_site_packages_private_artifact_tree(tmp_path: Path) -> Non
     (paths.figure_dir / "sma_channel_decision_plot.png").write_bytes(b"figure")
     (paths.report_dir / "current_bottom_summary.csv").write_text("a,b\n1,2\n", encoding="utf-8")
     (paths.report_dir / "pipeline_health.json").write_text(
-        '{"generated_at": "2026-06-08T00:09:26+02:00"}',
+        """
+{
+  "generated_at": "2026-06-08T00:09:26+02:00",
+  "today_utc": "2026-06-07",
+  "overall_status": "warn",
+  "status_counts": {"ok": 2, "warn": 1},
+  "items": [
+    {
+      "category": "Data sources",
+      "name": "BTC daily prices",
+      "status": "ok",
+      "date": "2026-06-07",
+      "source": "Coin Metrics + CoinGecko recent-fill",
+      "path": "C:\\\\CodexProjects\\\\btcfloor\\\\data\\\\processed\\\\btc_daily.csv"
+    },
+    {
+      "category": "Data sources",
+      "name": "CVDD source",
+      "status": "warn",
+      "date": "2026-06-07",
+      "source": "Looknode fallback",
+      "path": "C:\\\\CodexProjects\\\\btcfloor\\\\reports\\\\checkonchain_cohort_summary.json"
+    }
+  ]
+}
+""",
         encoding="utf-8",
     )
     (paths.report_dir / "data_quality.md").write_text("# Data quality\n", encoding="utf-8")
@@ -59,6 +84,14 @@ def test_build_static_site_packages_private_artifact_tree(tmp_path: Path) -> Non
 
     index = (site_root / "index.html").read_text(encoding="utf-8")
     assert "2026-06-08T00:09:26+02:00" in index
+    assert "btcfloor dashboard site" in index
+    assert "Data health" in index
+    assert "Overall" in index
+    assert "WARN" in index
+    assert "CVDD source" in index
+    assert "Looknode fallback" in index
+    assert "reports/checkonchain_cohort_summary.json" in index
+    assert "Public hosting is intentionally not enabled" not in index
     for link in DASHBOARD_LINKS:
         assert f"reports/interactive/{link.href}" in index
         assert (site_root / "reports" / "interactive" / link.href).exists()

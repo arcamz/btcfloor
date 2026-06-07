@@ -41,16 +41,22 @@ def _require_source_tree(paths: ProjectPaths) -> None:
 
 
 def _generated_at(paths: ProjectPaths) -> str:
-    health_path = paths.report_dir / "pipeline_health.json"
-    if health_path.exists():
-        try:
-            payload = json.loads(health_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            payload = {}
-        generated_at = payload.get("generated_at")
-        if generated_at:
-            return str(generated_at)
+    payload = _health_payload(paths)
+    generated_at = payload.get("generated_at")
+    if generated_at:
+        return str(generated_at)
     return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+def _health_payload(paths: ProjectPaths) -> dict:
+    health_path = paths.report_dir / "pipeline_health.json"
+    if not health_path.exists():
+        return {}
+    try:
+        payload = json.loads(health_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 def _copy_directory(source: Path, destination: Path) -> None:
@@ -92,13 +98,127 @@ def _report_links_html(report_files: list[str]) -> str:
     )
 
 
-def _index_html(generated_at: str, report_files: list[str]) -> str:
+def _status_badge(status: str) -> str:
+    normalized = status.lower()
+    labels = {
+        "ok": "OK",
+        "warn": "WARN",
+        "stale": "STALE",
+        "missing": "MISSING",
+    }
+    return (
+        f'<span class="status-badge {html.escape(normalized)}">'
+        f"{html.escape(labels.get(normalized, normalized.upper()))}</span>"
+    )
+
+
+def _health_counts_html(health: dict) -> str:
+    counts = health.get("status_counts") or {}
+    parts = [
+        ("OK", counts.get("ok", 0), "ok"),
+        ("Warn", counts.get("warn", 0), "warn"),
+        ("Stale", counts.get("stale", 0), "stale"),
+        ("Missing", counts.get("missing", 0), "missing"),
+    ]
+    return "\n".join(
+        f'<span class="health-count {css_class}">{label}: {int(value or 0)}</span>'
+        for label, value, css_class in parts
+    )
+
+
+def _public_path(path_value: object) -> str:
+    if not path_value:
+        return ""
+    try:
+        path = Path(str(path_value))
+    except (TypeError, ValueError):
+        return str(path_value)
+
+    parts = list(path.parts)
+    if "reports" in parts:
+        return "/".join(parts[parts.index("reports") :])
+    return path.name
+
+
+def _health_rows_html(health: dict) -> str:
+    items = health.get("items")
+    if not isinstance(items, list) or not items:
+        return """
+              <tr>
+                <td colspan="6" class="empty">No pipeline health payload was packaged.</td>
+              </tr>"""
+
+    rows = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            f"""
+              <tr>
+                <td>{_status_badge(str(item.get("status", "")))}</td>
+                <td>{html.escape(str(item.get("category") or ""))}</td>
+                <td>{html.escape(str(item.get("name") or ""))}</td>
+                <td>{html.escape(str(item.get("date") or ""))}</td>
+                <td>{html.escape(str(item.get("source") or ""))}</td>
+                <td>{html.escape(_public_path(item.get("path")))}</td>
+              </tr>"""
+        )
+    return "\n".join(rows)
+
+
+def _health_section_html(health: dict) -> str:
+    if not health:
+        return """
+    <section>
+      <h2>Data health</h2>
+      <div class="note">
+        No pipeline health payload was packaged. Open the Data Health dashboard
+        after the next successful refresh.
+      </div>
+    </section>"""
+
+    overall = str(health.get("overall_status") or "unknown")
+    generated_at = str(health.get("generated_at") or "")
+    today_utc = str(health.get("today_utc") or "")
+    return f"""
+    <section>
+      <div class="section-heading">
+        <h2>Data health</h2>
+        <a class="section-link" href="reports/interactive/pipeline_health_dashboard.html">Open full health dashboard</a>
+      </div>
+      <div class="health-summary">
+        <span>Overall {_status_badge(overall)}</span>
+        <span>Generated {html.escape(generated_at)}</span>
+        <span>UTC date {html.escape(today_utc)}</span>
+        {_health_counts_html(health)}
+      </div>
+      <div class="table-wrap">
+        <table class="health-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Category</th>
+              <th>Name</th>
+              <th>Latest</th>
+              <th>Source</th>
+              <th>Packaged path</th>
+            </tr>
+          </thead>
+          <tbody>
+{_health_rows_html(health)}
+          </tbody>
+        </table>
+      </div>
+    </section>"""
+
+
+def _index_html(generated_at: str, report_files: list[str], health: dict) -> str:
     return f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>btcfloor Private Dashboard Artifact</title>
+  <title>btcfloor Dashboard Site</title>
   <style>
     :root {{
       --ink: #172033;
@@ -150,6 +270,20 @@ def _index_html(generated_at: str, report_files: list[str]) -> str:
     section {{
       margin: 0 0 28px;
     }}
+    .section-heading {{
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 16px;
+      margin-bottom: 12px;
+    }}
+    .section-link {{
+      color: var(--accent);
+      font-weight: 650;
+      text-decoration: none;
+      border-bottom: 1px solid var(--accent);
+      white-space: nowrap;
+    }}
     .dashboard-grid {{
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -196,6 +330,69 @@ def _index_html(generated_at: str, report_files: list[str]) -> str:
     .empty {{
       color: var(--muted);
     }}
+    .health-summary {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+    .status-badge, .health-count {{
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: 0;
+    }}
+    .status-badge.ok, .health-count.ok {{
+      color: #14532d;
+      background: #dcfce7;
+    }}
+    .status-badge.warn, .health-count.warn {{
+      color: #854d0e;
+      background: #fef3c7;
+    }}
+    .status-badge.stale, .status-badge.missing, .health-count.stale, .health-count.missing {{
+      color: #7f1d1d;
+      background: #fee2e2;
+    }}
+    .table-wrap {{
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+    }}
+    .health-table {{
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 920px;
+      font-size: 13px;
+    }}
+    .health-table th, .health-table td {{
+      border-bottom: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }}
+    .health-table th {{
+      color: var(--muted);
+      font-weight: 750;
+      background: var(--band);
+    }}
+    .health-table td {{
+      color: var(--ink);
+    }}
+    .health-table tr:last-child td {{
+      border-bottom: 0;
+    }}
     @media (max-width: 900px) {{
       main {{
         padding: 18px;
@@ -203,20 +400,28 @@ def _index_html(generated_at: str, report_files: list[str]) -> str:
       .dashboard-grid, .report-grid {{
         grid-template-columns: 1fr;
       }}
+      .section-heading {{
+        display: block;
+      }}
+      .section-link {{
+        display: inline-block;
+        margin-top: 6px;
+      }}
     }}
   </style>
 </head>
 <body>
   <main>
-    <h1>btcfloor private dashboard artifact</h1>
+    <h1>btcfloor dashboard site</h1>
     <p class="lead">
-      This package was generated by GitHub Actions. The workflow refreshed the
-      data, rebuilt the reports and dashboards, then packaged the static output
-      for private download from the Actions run.
+      This site was generated by GitHub Actions. The workflow refreshed the
+      data, rebuilt the reports and dashboards, then published the static
+      output to GitHub Pages with a private Actions artifact fallback.
     </p>
     <div class="meta">
       <span class="pill">Generated at {html.escape(generated_at)}</span>
-      <span class="pill">Private Actions artifact</span>
+      <span class="pill">GitHub Pages</span>
+      <span class="pill">Private artifact fallback</span>
       <span class="pill">Scheduled every 4 hours</span>
     </div>
     <section>
@@ -231,11 +436,13 @@ def _index_html(generated_at: str, report_files: list[str]) -> str:
         {_report_links_html(report_files)}
       </div>
     </section>
+{_health_section_html(health)}
     <section>
       <div class="note">
-        Open this file after downloading and unpacking the artifact. The
-        dashboards keep their existing relative links to <code>reports/figures</code>.
-        Public hosting is intentionally not enabled in this version.
+        The dashboards keep their existing relative links to
+        <code>reports/figures</code>. If GitHub Pages is unavailable, download
+        the private workflow artifact and open <code>index.html</code> from the
+        unpacked artifact root.
       </div>
     </section>
   </main>
@@ -261,7 +468,7 @@ def build_static_site(paths: ProjectPaths, output_root: Path | None = None) -> P
 
     (site_root / ".nojekyll").write_text("", encoding="utf-8")
     (site_root / "index.html").write_text(
-        _index_html(_generated_at(paths), report_files),
+        _index_html(_generated_at(paths), report_files, _health_payload(paths)),
         encoding="utf-8",
     )
     return site_root
