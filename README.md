@@ -6,8 +6,8 @@ timing assumptions, forward floor-overlap signals, and validation reports into
 one maintainable command-line package.
 
 The goal is not to predict price. The goal is to make floor-pressure research
-auditable: formulas live in code, reports are generated locally, and generated
-market data is kept out of git.
+auditable: formulas live in code, reports are generated locally or in GitHub
+Actions, and generated market data is kept out of git.
 
 ## Features
 
@@ -48,13 +48,23 @@ Run the core floor analysis:
 uv run btcfloor analyze
 ```
 
-For normal daily use, refresh the full local decision surface. This updates
-BTC market data, floor reports, tactical images, Checkonchain cohort data,
-metals/GSR data, BTC/gold rotation data, pipeline health, and interactive
-dashboards:
+For local reproduction or manual refreshes, refresh the full decision surface.
+This updates BTC market data, floor reports, tactical images, Checkonchain
+cohort data, metals/GSR data, BTC/gold rotation data, pipeline health, and
+interactive dashboards:
 
 ```powershell
 uv run scripts/update_daily.py
+```
+
+GitHub Actions also runs this refresh every 4 hours, packages the static site
+into `dist/site/`, and uploads it as a private workflow artifact. The hosted
+artifact path does not depend on this local machine.
+
+To package the same static site locally after generated reports already exist:
+
+```powershell
+uv run scripts/build_static_site.py
 ```
 
 Then open the primary dashboards:
@@ -65,6 +75,9 @@ Then open the primary dashboards:
 - `reports/interactive/btc_gold_rotation_dashboard.html`
 - `reports/interactive/metals_relative_dashboard.html`
 - `reports/interactive/pipeline_health_dashboard.html`
+
+When using the private workflow artifact, open `index.html` from the unpacked
+artifact root.
 
 For automated visual checks with the Codex Browser, serve the repo over local
 HTTP instead of using `file://`, because the Browser URL policy can block
@@ -84,7 +97,8 @@ uv run btcfloor chart
 ```
 
 Generated outputs are written under `data/` and `reports/`. These directories
-are intentionally ignored by git.
+are intentionally ignored by git. The private static artifact packager writes
+`dist/site/`, which is also ignored by git.
 
 ## Commands
 
@@ -95,6 +109,7 @@ uv run btcfloor analyze
 uv run btcfloor analyze --force-download
 uv run btcfloor chart
 uv run scripts/update_daily.py
+uv run scripts/build_static_site.py
 uv run scripts/build_interactive_dashboards.py
 uv run scripts/build_metals_dashboard.py
 uv run scripts/build_btc_gold_dashboard.py

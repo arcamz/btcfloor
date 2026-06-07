@@ -1,0 +1,50 @@
+name: Refresh Private Static Site
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */4 * * *"
+  push:
+    branches: [main]
+
+concurrency:
+  group: refresh-private-static-site
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      BITBO_API_KEY: ${{ secrets.BITBO_API_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Run tests
+        run: uv run pytest -q
+
+      - name: Refresh data and reports
+        run: uv run scripts/update_daily.py
+
+      - name: Build static site
+        run: uv run scripts/build_static_site.py
+
+      - name: Upload private static site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: btcfloor-static-site-${{ github.run_number }}
+          path: dist/site
+          if-no-files-found: error
+          retention-days: 14

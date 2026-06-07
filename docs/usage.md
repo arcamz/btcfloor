@@ -1,8 +1,9 @@
 # Usage
 
-`btcfloor` is a local research toolkit. Source code, tests, and docs are
-tracked in git; downloaded market data and generated reports live under
-`data/` and `reports/` and are intentionally ignored.
+`btcfloor` is a research toolkit. Source code, tests, and docs are tracked in
+git; downloaded market data and generated reports live under `data/` and
+`reports/` and are intentionally ignored. The scheduled refresh path runs in
+GitHub Actions; local commands are for manual reproduction and debugging.
 
 ## Daily update
 
@@ -21,6 +22,10 @@ This refreshes:
 - metals/GSR data and the metals relative-strength dashboard,
 - BTC/gold rotation data and dashboard,
 - data/pipeline health status.
+
+The GitHub Actions workflow runs the same update every 4 hours and uploads a
+private static-site artifact. Local refreshes are not required for that hosted
+artifact to update.
 
 Primary dashboard entry points:
 
@@ -55,6 +60,16 @@ uv run scripts/build_metals_dashboard.py
 uv run scripts/build_btc_gold_dashboard.py
 uv run scripts/build_pipeline_health_dashboard.py
 ```
+
+Package the generated reports and dashboards into `dist/site/`:
+
+```powershell
+uv run scripts/build_static_site.py
+```
+
+The packaged site includes `index.html`, `reports/interactive/`,
+`reports/figures/`, and top-level generated report files. It intentionally
+excludes `data/raw/` and `data/processed/`.
 
 Regenerate only Checkonchain cohort figures:
 

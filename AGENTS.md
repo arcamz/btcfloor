@@ -6,6 +6,8 @@
 - Run Python commands through `uv run` so they use the project-managed environment.
 - If a uv environment does not exist, create one with `uv venv` before installing or running Python dependencies.
 - To refresh market data, reports, tactical plots, Checkonchain cohort plots, metals/GSR plots, BTC/gold rotation plots, pipeline health, and interactive dashboards, run `uv run scripts/update_daily.py`.
+- For the private hosted workflow, GitHub Actions runs the data refresh itself every 4 hours; do not assume the hosted artifact depends on local generated files.
+- To package the private static artifact locally after reports exist, run `uv run scripts/build_static_site.py`.
 - For only the core floor analysis, run `uv run btcfloor analyze --force-download`.
 - The canonical long-history source is Coin Metrics. If Coin Metrics lags, the code appends only missing recent BTC/USD daily rows from CoinGecko.
 - Treat processed daily bars as UTC-dated. If Europe/Stockholm has rolled into a new calendar day before UTC has, do not fabricate a new daily close; report the latest processed UTC date.
@@ -15,6 +17,7 @@
 - Regenerate only the metals relative-strength dashboard with `uv run scripts/build_metals_dashboard.py`.
 - Regenerate only the BTC/gold rotation dashboard with `uv run scripts/build_btc_gold_dashboard.py`.
 - Regenerate only the data/pipeline health dashboard with `uv run scripts/build_pipeline_health_dashboard.py`.
+- The private artifact output root is `dist/site/`; it is generated, ignored, and should not be committed.
 - The primary dashboard entry points are `reports/interactive/btc_market_dashboard.html`, `reports/interactive/btc_floor_weekly.html`, `reports/interactive/btc_roi_dashboard.html`, `reports/interactive/btc_gold_rotation_dashboard.html`, `reports/interactive/metals_relative_dashboard.html`, and `reports/interactive/pipeline_health_dashboard.html`.
 - For Codex Browser/plugin visual QA, serve the repo over local HTTP first, for example `uv run python -m http.server 8765 --bind 127.0.0.1 --directory C:\CodexProjects\btcfloor`, then open `http://127.0.0.1:8765/reports/interactive/...`. Do not leave the in-app browser parked on `file://` for automation because the Browser URL policy can block commands on that tab.
 - Read `reports/current_bottom_summary.csv`, `reports/risk_role_based.csv`, `reports/forward_floor_overlap_episodes.csv`, `reports/sma_channel_decision_metrics.csv`, `reports/checkonchain_cohort_summary.json`, `reports/metals_relative_summary.json`, and `reports/btc_gold_rotation_summary.json` before giving market interpretation.
