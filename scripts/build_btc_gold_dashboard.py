@@ -34,6 +34,20 @@ def _linear_range(values: pd.Series, pad_fraction: float = 0.08) -> list[float] 
     return [low - pad, high + pad]
 
 
+def _log_range(values: pd.Series, pad_fraction: float = 0.08) -> list[float] | None:
+    finite = pd.to_numeric(values, errors="coerce").dropna()
+    finite = finite[finite > 0]
+    if finite.empty:
+        return None
+    low = math.log10(float(finite.min()))
+    high = math.log10(float(finite.max()))
+    if math.isclose(low, high):
+        pad = 0.08
+    else:
+        pad = (high - low) * pad_fraction
+    return [low - pad, high + pad]
+
+
 def _money(value: float) -> str:
     return f"${value:,.0f}"
 
@@ -282,6 +296,9 @@ def _make_rotation_chart(
 
 def _make_weekly_chart(weekly: pd.DataFrame, expected_low_date: pd.Timestamp) -> go.Figure:
     latest = weekly.iloc[-1]
+    latest_date = pd.Timestamp(latest["date"])
+    view_start = max(latest_date - pd.Timedelta(days=1095), weekly["date"].min())
+    view_end = max(expected_low_date + pd.Timedelta(days=21), latest_date + pd.Timedelta(days=84))
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
@@ -328,8 +345,12 @@ def _make_weekly_chart(weekly: pd.DataFrame, expected_low_date: pd.Timestamp) ->
         margin={"l": 74, "r": 36, "t": 54, "b": 48},
         legend={"orientation": "h", "y": 1.04, "x": 0.01, "font": {"size": 11}},
     )
-    fig.update_yaxes(title_text="Gold oz / BTC", type="log")
-    fig.update_xaxes(title_text="Week")
+    visible = weekly.loc[weekly["date"].between(view_start, latest_date)]
+    y_range = _log_range(
+        visible[["btc_xau", "btc_xau_sma20w", "btc_xau_sma50w", "btc_xau_sma200w"]].stack()
+    )
+    fig.update_yaxes(title_text="Gold oz / BTC", type="log", range=y_range)
+    fig.update_xaxes(title_text="Week", range=[view_start, view_end])
     return fig
 
 
