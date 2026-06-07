@@ -58,8 +58,9 @@ uv run scripts/update_daily.py
 ```
 
 GitHub Actions also runs this refresh every 4 hours, packages the static site
-into `dist/site/`, and uploads it as a private workflow artifact. The hosted
-artifact path does not depend on this local machine.
+into `dist/site/`, publishes it to GitHub Pages, and uploads the same tree as
+a private workflow artifact fallback. The hosted refresh path does not depend
+on this local machine.
 
 To package the same static site locally after generated reports already exist:
 
@@ -76,8 +77,14 @@ Then open the primary dashboards:
 - `reports/interactive/metals_relative_dashboard.html`
 - `reports/interactive/pipeline_health_dashboard.html`
 
-When using the private workflow artifact, open `index.html` from the unpacked
-artifact root.
+The GitHub Pages project site is expected at:
+
+```text
+https://arcamz.github.io/btcfloor/
+```
+
+If Pages is unavailable, use the private workflow artifact and open
+`index.html` from the unpacked artifact root.
 
 For automated visual checks with the Codex Browser, serve the repo over local
 HTTP instead of using `file://`, because the Browser URL policy can block
@@ -97,8 +104,8 @@ uv run btcfloor chart
 ```
 
 Generated outputs are written under `data/` and `reports/`. These directories
-are intentionally ignored by git. The private static artifact packager writes
-`dist/site/`, which is also ignored by git.
+are intentionally ignored by git. The static site packager writes `dist/site/`,
+which is also ignored by git and deployed from CI rather than committed.
 
 ## Commands
 

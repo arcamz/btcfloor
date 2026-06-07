@@ -23,9 +23,10 @@ This refreshes:
 - BTC/gold rotation data and dashboard,
 - data/pipeline health status.
 
-The GitHub Actions workflow runs the same update every 4 hours and uploads a
-private static-site artifact. Local refreshes are not required for that hosted
-artifact to update.
+The GitHub Actions workflow runs the same update every 4 hours, publishes the
+rebuilt static site to GitHub Pages, and uploads the same tree as a private
+static-site artifact fallback. Local refreshes are not required for the hosted
+site to update.
 
 Primary dashboard entry points:
 
@@ -70,6 +71,14 @@ uv run scripts/build_static_site.py
 The packaged site includes `index.html`, `reports/interactive/`,
 `reports/figures/`, and top-level generated report files. It intentionally
 excludes `data/raw/` and `data/processed/`.
+
+The GitHub Pages project URL is:
+
+```text
+https://arcamz.github.io/btcfloor/
+```
+
+The repository must have Pages configured with Source set to GitHub Actions.
 
 Regenerate only Checkonchain cohort figures:
 
