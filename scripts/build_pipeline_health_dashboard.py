@@ -230,6 +230,18 @@ def _metals_items(paths: ProjectPaths, items: list[dict[str, Any]], today: pd.Ti
             path=summary_path,
         )
 
+    legacy = summary.get("sources", {}).get("legacy_analog_context", {})
+    if legacy:
+        _add_item(
+            items,
+            "Data sources",
+            "LBMA legacy analog context",
+            "ok" if legacy.get("available", True) else "warn",
+            str(legacy.get("detail") or legacy.get("note") or "Legacy analog context status."),
+            source="LBMA",
+            path=summary_path,
+        )
+
 
 def _btc_gold_items(paths: ProjectPaths, items: list[dict[str, Any]], today: pd.Timestamp) -> None:
     summary_path = paths.report_dir / "btc_gold_rotation_summary.json"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import time
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,6 +55,16 @@ GSR_LEVELS = [
     (48.0, "Aggressive catch-up"),
 ]
 
+LBMA_COLUMNS = ["date", "price"]
+GOLD_ANALOG_COLUMNS = [
+    "projection_date",
+    "scaled_price",
+    "series",
+    "source_date",
+    "source_price",
+]
+SILVER_ANALOG_COLUMNS = GOLD_ANALOG_COLUMNS + ["anchor_date", "anchor_price"]
+
 
 def _linear_range(values: pd.Series, pad_fraction: float = 0.08) -> list[float] | None:
     finite = pd.to_numeric(values, errors="coerce").dropna()
@@ -90,8 +101,19 @@ class ChannelModel:
 
 def _fetch_json(url: str) -> object:
     request = urllib.request.Request(url, headers={"User-Agent": "btcfloor/0.1"})
-    with urllib.request.urlopen(request, timeout=45) as response:
-        return json.loads(response.read().decode("utf-8"))
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=45) as response:
+                body = response.read().decode("utf-8")
+            if not body.strip():
+                raise ValueError(f"Empty response from {url}")
+            return json.loads(body)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            last_error = exc
+            if attempt < 2:
+                time.sleep(2.0 * (attempt + 1))
+    raise RuntimeError(f"Could not fetch JSON from {url}: {last_error}") from last_error
 
 
 def _load_lbma(url: str) -> pd.DataFrame:
@@ -105,6 +127,18 @@ def _load_lbma(url: str) -> pd.DataFrame:
     data["date"] = pd.to_datetime(data["date"])
     data["price"] = pd.to_numeric(data["price"])
     return data.sort_values("date").reset_index(drop=True)
+
+
+def _empty_lbma() -> pd.DataFrame:
+    return pd.DataFrame(columns=LBMA_COLUMNS)
+
+
+def _empty_gold_analogs() -> pd.DataFrame:
+    return pd.DataFrame(columns=GOLD_ANALOG_COLUMNS)
+
+
+def _empty_silver_analogs() -> pd.DataFrame:
+    return pd.DataFrame(columns=SILVER_ANALOG_COLUMNS)
 
 
 def _load_yahoo_futures(symbol: str, label: str) -> pd.DataFrame:
@@ -1092,6 +1126,7 @@ def _write_summary(
     silver: pd.DataFrame,
     gsr: pd.DataFrame,
     source_label: str,
+    legacy_context: dict[str, object],
 ) -> dict[str, object]:
     latest_gold = gold.iloc[-1]
     latest_silver = silver.iloc[-1]
@@ -1110,6 +1145,7 @@ def _write_summary(
                 "gold_pm": GOLD_PM_URL,
                 "silver": SILVER_URL,
                 "note": "LBMA is retained only for long-history analog panels.",
+                **legacy_context,
             },
         },
         "latest": {
@@ -1142,18 +1178,47 @@ def _write_summary(
     return summary
 
 
+def _placeholder_panel(title: str, detail: str) -> str:
+    return f"""
+    <div style="border:1px solid #d9dee7;border-radius:8px;background:#fff;padding:18px 20px;color:#5b6472;line-height:1.5;min-height:180px;">
+      <h3 style="margin:0 0 8px;color:#172033;font-size:18px;">{title}</h3>
+      <p style="margin:0;">{detail}</p>
+    </div>
+    """
+
+
 def build_metals_dashboard(paths: ProjectPaths) -> list[Path]:
     paths.ensure_dirs()
     live_gold = _load_yahoo_futures(GOLD_FUTURES_SYMBOL, "Gold futures")
     live_silver = _load_yahoo_futures(SILVER_FUTURES_SYMBOL, "Silver futures")
-    legacy_gold = _load_lbma(GOLD_PM_URL)
-    legacy_silver = _load_lbma(SILVER_URL)
     gsr = _build_gsr(live_gold, live_silver)
-    gold_analogs, _, _ = _build_gold_analogs(legacy_gold)
-    silver_analogs, _, _ = _build_silver_analogs(legacy_silver)
-    channel = _build_channel_model(legacy_gold)
+
+    legacy_messages: list[str] = []
+    try:
+        legacy_gold = _load_lbma(GOLD_PM_URL)
+        gold_analogs, _, _ = _build_gold_analogs(legacy_gold)
+        channel = _build_channel_model(legacy_gold)
+    except Exception as exc:
+        legacy_gold = _empty_lbma()
+        gold_analogs = _empty_gold_analogs()
+        channel = None
+        legacy_messages.append(f"Gold LBMA unavailable: {exc}")
+
+    try:
+        legacy_silver = _load_lbma(SILVER_URL)
+        silver_analogs, _, _ = _build_silver_analogs(legacy_silver)
+    except Exception as exc:
+        legacy_silver = _empty_lbma()
+        silver_analogs = _empty_silver_analogs()
+        legacy_messages.append(f"Silver LBMA unavailable: {exc}")
+
     current_gold = live_gold.iloc[-1]
     current_silver = live_silver.iloc[-1]
+    legacy_available = not legacy_gold.empty and not legacy_silver.empty
+    legacy_context = {
+        "available": legacy_available,
+        "detail": "Available." if legacy_available else " ".join(legacy_messages),
+    }
 
     live_gold.to_csv(paths.processed_dir / "yahoo_gold_futures.csv", index=False)
     live_silver.to_csv(paths.processed_dir / "yahoo_silver_futures.csv", index=False)
@@ -1169,6 +1234,7 @@ def build_metals_dashboard(paths: ProjectPaths) -> list[Path]:
         live_silver,
         gsr,
         PRIMARY_SOURCE_LABEL,
+        legacy_context,
     )
     latest = summary["latest"]
     gsr_latest = latest["gsr"]
@@ -1187,34 +1253,58 @@ def build_metals_dashboard(paths: ProjectPaths) -> list[Path]:
         f"20D {float(gsr_latest['sma20']):.2f}, 50D {float(gsr_latest['sma50']):.2f}. "
         f"Read: {gsr_state}. Treat 60 as the first rotation trigger, "
         f"58.5 as weekly leadership confirmation, and 56/53/48 as silver outperformance targets. "
-        f"The gold/silver analog panels retain LBMA only as long-history context, not as the live decision feed."
+        f"The gold/silver analog panels retain LBMA only as long-history context, not as the live decision feed. "
+        f"Legacy analog context: {legacy_context['detail']}"
     )
 
-    body = "\n".join(
-        [
-            _section(
-                "Daily GSR monitor",
-                (
-                    "Primary switch tool. Falling GSR means silver is outperforming gold; "
-                    "levels mark rotate, confirm, and trim/reassess zones."
-                ),
-                _plotly_div(_make_gsr_chart(gsr, PRIMARY_SOURCE_LABEL), include_plotlyjs=True),
+    sections = [
+        _section(
+            "Daily GSR monitor",
+            (
+                "Primary switch tool. Falling GSR means silver is outperforming gold; "
+                "levels mark rotate, confirm, and trim/reassess zones."
             ),
+            _plotly_div(_make_gsr_chart(gsr, PRIMARY_SOURCE_LABEL), include_plotlyjs=True),
+        )
+    ]
+
+    if not legacy_gold.empty and not gold_analogs.empty and channel is not None:
+        sections.extend(
+            [
+                _section(
+                    "Gold analog monitor",
+                    (
+                        "Long-history analog context rebuilt from local source data, with a live "
+                        f"{GOLD_FUTURES_SYMBOL} marker added so it is not mistaken for the decision feed."
+                    ),
+                    _plotly_div(
+                        _make_gold_chart(gold_analogs, legacy_gold, channel, current_gold)
+                    ),
+                ),
+                _section(
+                    "Gold June-August zoom",
+                    "Short-window view for whether gold trend is still following the analog path.",
+                    _plotly_div(
+                        _make_gold_zoom_chart(gold_analogs, legacy_gold, channel, current_gold)
+                    ),
+                ),
+            ]
+        )
+    else:
+        sections.append(
             _section(
                 "Gold analog monitor",
-                (
-                    "Long-history analog context rebuilt from local source data, with a live "
-                    f"{GOLD_FUTURES_SYMBOL} marker added so it is not mistaken for the decision feed."
+                "Legacy LBMA context is optional; live GSR remains the primary decision feed.",
+                _placeholder_panel(
+                    "Gold analog context unavailable",
+                    "The LBMA endpoint did not return usable data during this refresh. "
+                    f"The live {GOLD_FUTURES_SYMBOL} and GSR monitor still updated.",
                 ),
-                _plotly_div(_make_gold_chart(gold_analogs, legacy_gold, channel, current_gold)),
-            ),
-            _section(
-                "Gold June-August zoom",
-                "Short-window view for whether gold trend is still following the analog path.",
-                _plotly_div(
-                    _make_gold_zoom_chart(gold_analogs, legacy_gold, channel, current_gold)
-                ),
-            ),
+            )
+        )
+
+    if not legacy_silver.empty and not silver_analogs.empty:
+        sections.append(
             _section(
                 "Silver analog monitor",
                 (
@@ -1224,9 +1314,22 @@ def build_metals_dashboard(paths: ProjectPaths) -> list[Path]:
                 _plotly_div(
                     _make_silver_chart(silver_analogs, legacy_silver.iloc[-1], current_silver)
                 ),
-            ),
-        ]
-    )
+            )
+        )
+    else:
+        sections.append(
+            _section(
+                "Silver analog monitor",
+                "Legacy LBMA context is optional; live GSR remains the primary decision feed.",
+                _placeholder_panel(
+                    "Silver analog context unavailable",
+                    "The LBMA endpoint did not return usable data during this refresh. "
+                    f"The live {SILVER_FUTURES_SYMBOL} and GSR monitor still updated.",
+                ),
+            )
+        )
+
+    body = "\n".join(sections)
 
     dashboard = paths.interactive_dir / "metals_relative_dashboard.html"
     dashboard.write_text(
