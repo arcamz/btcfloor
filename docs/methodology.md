@@ -130,9 +130,12 @@ answers whether silver is outperforming gold. The monitored levels are:
 - 53.0: strong silver outperformance target.
 - 48.0: aggressive silver catch-up target.
 
-Legacy LBMA series are retained only for long-history analog context. Raw gold
-and silver analog returns are useful context, but rotation should be based on
-live GSR breakdown plus silver price confirmation.
+Legacy LBMA series are retained only for long-history analog context. Scheduled
+refreshes read tracked snapshots from `resources/legacy/` rather than calling
+LBMA every time; those snapshots can be manually refreshed with
+`BTCFLOOR_REFRESH_LBMA=1` when we intentionally want to update the analog
+history. Raw gold and silver analog returns are useful context, but rotation
+should be based on live GSR breakdown plus silver price confirmation.
 
 ## BTC/gold rotation layer
 

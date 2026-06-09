@@ -25,6 +25,7 @@
 - Checkonchain Cointime Price is included in the weekly realised-price stress map. Classic CVDD uses Bitbo when `BITBO_API_KEY` is available and otherwise falls back to Looknode's public classic-formula CVDD API; label the fallback as `CVDD (Looknode fallback)` rather than plain canonical CVDD. Do not use BGeometrics CVDD for tactical floor charts because it is on a different normalization scale.
 - For metals allocation, use GSR as the primary gold-vs-silver switch tool: 60 is the initial silver rotation trigger, 58.5 is confirmation, and 56/53/48 are silver outperformance target zones.
 - For metals/GSR decisions, prefer current market data from Yahoo Finance COMEX futures (`GC=F`, `SI=F`). LBMA fixes are not preferred for live decisions and should only be treated as long-history analog context when no better historical source is wired in.
+- LBMA gold/silver fixes for legacy metals analog panels are tracked snapshots in `resources/legacy/`; scheduled runs should use those snapshots instead of calling LBMA. Refresh them only with `BTCFLOOR_REFRESH_LBMA=1`, then review and commit the snapshot CSVs intentionally.
 - For gold-vs-BTC rotation, use `reports/interactive/btc_gold_rotation_dashboard.html`: BTC/XAU above 20D is only a probe, 50D plus weekly 20W is stronger rotation evidence, and 200D/weekly 50W is regime repair.
 - Dashboard commentary should be quantitative and regenerated from current report data, not handwritten static prose.
 - Generated `data/`, `reports/`, and `dist/` artifacts are intentionally ignored and should not be committed.

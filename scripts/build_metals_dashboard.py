@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import time
 import urllib.request
 from dataclasses import dataclass
@@ -24,6 +25,8 @@ GOLD_FUTURES_SYMBOL = "GC=F"
 SILVER_FUTURES_SYMBOL = "SI=F"
 PRIMARY_SOURCE_LABEL = "Yahoo Finance COMEX futures"
 YAHOO_LIVE_RANGE = "5y"
+LBMA_REFRESH_ENV = "BTCFLOOR_REFRESH_LBMA"
+LEGACY_RESOURCE_DIR = Path("resources") / "legacy"
 
 CURRENT_ANCHOR = pd.Timestamp("2026-01-29")
 GOLD_PROJECTION_DAYS = 270
@@ -64,6 +67,12 @@ GOLD_ANALOG_COLUMNS = [
     "source_price",
 ]
 SILVER_ANALOG_COLUMNS = GOLD_ANALOG_COLUMNS + ["anchor_date", "anchor_price"]
+
+
+@dataclass(frozen=True)
+class LegacySeries:
+    data: pd.DataFrame
+    status: dict[str, object]
 
 
 def _linear_range(values: pd.Series, pad_fraction: float = 0.08) -> list[float] | None:
@@ -127,6 +136,141 @@ def _load_lbma(url: str) -> pd.DataFrame:
     data["date"] = pd.to_datetime(data["date"])
     data["price"] = pd.to_numeric(data["price"])
     return data.sort_values("date").reset_index(drop=True)
+
+
+def _normalize_lbma(data: pd.DataFrame) -> pd.DataFrame:
+    if data.empty:
+        return _empty_lbma()
+    normalized = data.loc[:, ["date", "price"]].copy()
+    normalized["date"] = pd.to_datetime(normalized["date"])
+    normalized["price"] = pd.to_numeric(normalized["price"])
+    return normalized.dropna(subset=["date", "price"]).sort_values("date").reset_index(drop=True)
+
+
+def _legacy_snapshot_path(paths: ProjectPaths, filename: str) -> Path:
+    return paths.root / LEGACY_RESOURCE_DIR / filename
+
+
+def _load_lbma_snapshot(path: Path) -> pd.DataFrame:
+    return _normalize_lbma(pd.read_csv(path))
+
+
+def _truthy_env(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _series_status(
+    *,
+    name: str,
+    url: str,
+    snapshot_path: Path,
+    source: str,
+    data: pd.DataFrame,
+    detail: str,
+    refreshed: bool,
+) -> dict[str, object]:
+    latest_date = None
+    row_count = 0
+    if not data.empty:
+        latest_date = f"{pd.Timestamp(data['date'].max()):%Y-%m-%d}"
+        row_count = int(len(data))
+    return {
+        "name": name,
+        "url": url,
+        "snapshot_path": str(snapshot_path),
+        "source": source,
+        "available": not data.empty,
+        "latest_date": latest_date,
+        "row_count": row_count,
+        "refreshed": refreshed,
+        "detail": detail,
+    }
+
+
+def _load_legacy_lbma_series(
+    *,
+    paths: ProjectPaths,
+    name: str,
+    url: str,
+    filename: str,
+) -> LegacySeries:
+    snapshot_path = _legacy_snapshot_path(paths, filename)
+    refresh_requested = _truthy_env(LBMA_REFRESH_ENV)
+
+    if refresh_requested:
+        try:
+            data = _normalize_lbma(_load_lbma(url))
+        except Exception as exc:
+            if snapshot_path.exists():
+                fallback = _load_lbma_snapshot(snapshot_path)
+                return LegacySeries(
+                    fallback,
+                    _series_status(
+                        name=name,
+                        url=url,
+                        snapshot_path=snapshot_path,
+                        source="bundled_snapshot_after_refresh_failure",
+                        data=fallback,
+                        detail=(
+                            f"Manual LBMA refresh failed, using bundled snapshot. "
+                            f"Failure: {exc}"
+                        ),
+                        refreshed=False,
+                    ),
+                )
+            raise
+
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+        data.to_csv(snapshot_path, index=False)
+        return LegacySeries(
+            data,
+            _series_status(
+                name=name,
+                url=url,
+                snapshot_path=snapshot_path,
+                source="api_manual_refresh",
+                data=data,
+                detail=(
+                    f"Fetched from LBMA because {LBMA_REFRESH_ENV}=1. "
+                    "Commit the updated snapshot if this was intentional."
+                ),
+                refreshed=True,
+            ),
+        )
+
+    if snapshot_path.exists():
+        data = _load_lbma_snapshot(snapshot_path)
+        return LegacySeries(
+            data,
+            _series_status(
+                name=name,
+                url=url,
+                snapshot_path=snapshot_path,
+                source="bundled_snapshot",
+                data=data,
+                detail=(
+                    f"Using bundled LBMA snapshot. Set {LBMA_REFRESH_ENV}=1 "
+                    "for an explicit manual refresh."
+                ),
+                refreshed=False,
+            ),
+        )
+
+    data = _normalize_lbma(_load_lbma(url))
+    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+    data.to_csv(snapshot_path, index=False)
+    return LegacySeries(
+        data,
+        _series_status(
+            name=name,
+            url=url,
+            snapshot_path=snapshot_path,
+            source="api_seeded_missing_snapshot",
+            data=data,
+            detail="Fetched from LBMA because no bundled snapshot was present.",
+            refreshed=True,
+        ),
+    )
 
 
 def _empty_lbma() -> pd.DataFrame:
@@ -1142,8 +1286,10 @@ def _write_summary(
                 "note": "Primary metals/GSR decision monitor uses current COMEX futures bars.",
             },
             "legacy_analog_context": {
-                "gold_pm": GOLD_PM_URL,
-                "silver": SILVER_URL,
+                "endpoints": {
+                    "gold_pm": GOLD_PM_URL,
+                    "silver": SILVER_URL,
+                },
                 "note": "LBMA is retained only for long-history analog panels.",
                 **legacy_context,
             },
@@ -1194,30 +1340,68 @@ def build_metals_dashboard(paths: ProjectPaths) -> list[Path]:
     gsr = _build_gsr(live_gold, live_silver)
 
     legacy_messages: list[str] = []
+    gold_series = _load_legacy_lbma_series(
+        paths=paths,
+        name="Gold PM fix",
+        url=GOLD_PM_URL,
+        filename="lbma_gold_pm.csv",
+    )
+    legacy_gold = gold_series.data
     try:
-        legacy_gold = _load_lbma(GOLD_PM_URL)
         gold_analogs, _, _ = _build_gold_analogs(legacy_gold)
         channel = _build_channel_model(legacy_gold)
     except Exception as exc:
-        legacy_gold = _empty_lbma()
         gold_analogs = _empty_gold_analogs()
         channel = None
-        legacy_messages.append(f"Gold LBMA unavailable: {exc}")
+        legacy_messages.append(f"Gold analog unavailable: {exc}")
 
+    silver_series = _load_legacy_lbma_series(
+        paths=paths,
+        name="Silver fix",
+        url=SILVER_URL,
+        filename="lbma_silver.csv",
+    )
+    legacy_silver = silver_series.data
     try:
-        legacy_silver = _load_lbma(SILVER_URL)
         silver_analogs, _, _ = _build_silver_analogs(legacy_silver)
     except Exception as exc:
-        legacy_silver = _empty_lbma()
         silver_analogs = _empty_silver_analogs()
-        legacy_messages.append(f"Silver LBMA unavailable: {exc}")
+        legacy_messages.append(f"Silver analog unavailable: {exc}")
 
     current_gold = live_gold.iloc[-1]
     current_silver = live_silver.iloc[-1]
-    legacy_available = not legacy_gold.empty and not legacy_silver.empty
+    legacy_available = (
+        not legacy_gold.empty
+        and not legacy_silver.empty
+        and not gold_analogs.empty
+        and not silver_analogs.empty
+    )
+    latest_dates = [
+        item.get("latest_date")
+        for item in (gold_series.status, silver_series.status)
+        if item.get("latest_date")
+    ]
+    source_labels = sorted(
+        {
+            str(item.get("source"))
+            for item in (gold_series.status, silver_series.status)
+            if item.get("source")
+        }
+    )
     legacy_context = {
         "available": legacy_available,
-        "detail": "Available." if legacy_available else " ".join(legacy_messages),
+        "latest_date": max(latest_dates) if latest_dates else None,
+        "source": ", ".join(source_labels) if source_labels else None,
+        "refresh_env": LBMA_REFRESH_ENV,
+        "gold": gold_series.status,
+        "silver": silver_series.status,
+        "detail": (
+            "Available from "
+            + (", ".join(source_labels) if source_labels else "legacy source")
+            + "."
+            if legacy_available
+            else " ".join(legacy_messages)
+        ),
     }
 
     live_gold.to_csv(paths.processed_dir / "yahoo_gold_futures.csv", index=False)

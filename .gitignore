@@ -35,3 +35,5 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Local verification logs
+.tmp_http_*.log

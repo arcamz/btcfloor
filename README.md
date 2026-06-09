@@ -191,7 +191,17 @@ The metals relative-strength dashboard uses Yahoo Finance COMEX futures
 `data/processed/metals_gsr_daily.csv`, then marks GSR decision levels for
 gold-vs-silver rotation. LBMA gold/silver fixes are retained only for the
 legacy long-history analog panels until a better long-history metals source is
-wired in.
+wired in. Scheduled refreshes use tracked snapshots in `resources/legacy/`
+instead of calling LBMA every run, so the analog panels keep rendering when the
+LBMA endpoint is unavailable. To refresh those snapshots manually, run:
+
+```powershell
+$env:BTCFLOOR_REFRESH_LBMA='1'
+uv run scripts/build_metals_dashboard.py
+```
+
+Then review and commit `resources/legacy/lbma_gold_pm.csv` and
+`resources/legacy/lbma_silver.csv` if the update is intentional.
 
 The BTC/gold rotation dashboard combines the processed BTC daily series with
 Yahoo Finance COMEX gold futures (`GC=F`) and writes

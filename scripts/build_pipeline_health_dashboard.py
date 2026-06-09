@@ -238,7 +238,8 @@ def _metals_items(paths: ProjectPaths, items: list[dict[str, Any]], today: pd.Ti
             "LBMA legacy analog context",
             "ok" if legacy.get("available", True) else "warn",
             str(legacy.get("detail") or legacy.get("note") or "Legacy analog context status."),
-            source="LBMA",
+            source=legacy.get("source") or "LBMA",
+            date=legacy.get("latest_date"),
             path=summary_path,
         )
 

@@ -98,7 +98,12 @@ Classic CVDD uses Bitbo when `BITBO_API_KEY` is configured; otherwise the
 dashboard labels the Looknode public endpoint as a third-party fallback.
 
 Metals/GSR uses Yahoo Finance COMEX futures (`GC=F`, `SI=F`) for live decision
-monitoring. LBMA fixes are kept only for long-history analog context.
+monitoring. LBMA fixes are kept only for long-history analog context and are
+read from tracked snapshots in `resources/legacy/` during scheduled refreshes.
+This keeps the analog panels available even when the LBMA API is unavailable.
+To refresh those snapshots manually, set `BTCFLOOR_REFRESH_LBMA=1` before
+running `uv run scripts/build_metals_dashboard.py`, then review and commit the
+updated snapshot CSVs.
 
 BTC/gold rotation uses processed BTC daily closes and Yahoo Finance COMEX gold
 futures (`GC=F`) on the latest shared trading date. The dashboard does not

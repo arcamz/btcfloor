@@ -43,6 +43,11 @@ implementation is normal git sync.
 - The repository must have Pages configured with Source set to GitHub Actions.
 - `BITBO_API_KEY` is optional. If it is missing, the existing Looknode CVDD
   fallback remains expected and is labelled by the dashboards and health report.
+- Legacy LBMA gold/silver analog panels use tracked snapshots from
+  `resources/legacy/` during scheduled refreshes. Do not make the 4-hour
+  workflow depend on live LBMA availability. Refresh those snapshots only in an
+  explicit manual maintenance run with `BTCFLOOR_REFRESH_LBMA=1`, then review
+  and commit the updated CSVs intentionally.
 
 ## Static Artifact Contract
 
@@ -105,3 +110,5 @@ implementation is normal git sync.
 - Existing dashboard relative links must keep working in the artifact.
 - GitHub's scheduler may delay runs, so "every 4 hours" means scheduled every
   4 hours, not guaranteed exact wall-clock execution.
+- The LBMA snapshot files under `resources/legacy/` are source fixtures for
+  long-history analog context, not generated report artifacts.
