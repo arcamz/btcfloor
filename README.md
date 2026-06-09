@@ -202,6 +202,9 @@ uv run scripts/build_metals_dashboard.py
 
 Then review and commit `resources/legacy/lbma_gold_pm.csv` and
 `resources/legacy/lbma_silver.csv` if the update is intentional.
+In the metals analog charts, prior analog paths use LBMA for source consistency;
+the 2026 LBMA path is dashed static context, while the solid 2026 `GC=F` and
+`SI=F` lines are the live price sources to follow.
 
 The BTC/gold rotation dashboard combines the processed BTC daily series with
 Yahoo Finance COMEX gold futures (`GC=F`) and writes

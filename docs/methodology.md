@@ -134,8 +134,11 @@ Legacy LBMA series are retained only for long-history analog context. Scheduled
 refreshes read tracked snapshots from `resources/legacy/` rather than calling
 LBMA every time; those snapshots can be manually refreshed with
 `BTCFLOOR_REFRESH_LBMA=1` when we intentionally want to update the analog
-history. Raw gold and silver analog returns are useful context, but rotation
-should be based on live GSR breakdown plus silver price confirmation.
+history. In the analog panels, historical paths use LBMA for source consistency,
+the 2026 LBMA path is dashed static context, and the solid 2026 `GC=F` / `SI=F`
+lines are the live price sources to follow. Raw gold and silver analog returns
+are useful context, but rotation should be based on live GSR breakdown plus
+silver price confirmation.
 
 ## BTC/gold rotation layer
 

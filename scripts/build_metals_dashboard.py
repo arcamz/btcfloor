@@ -497,9 +497,17 @@ def _make_gold_chart(
     analogs: pd.DataFrame,
     lbma: pd.DataFrame,
     channel: ChannelModel,
-    current_gold: pd.Series,
+    live_gold: pd.DataFrame,
 ) -> go.Figure:
     latest = lbma.iloc[-1]
+    current_gold = live_gold.iloc[-1]
+    live_line = live_gold[
+        (live_gold["date"] >= CURRENT_ANCHOR)
+        & (
+            live_gold["date"]
+            <= CURRENT_ANCHOR + pd.Timedelta(days=GOLD_PROJECTION_DAYS)
+        )
+    ].copy()
     projection_x = pd.date_range(
         CURRENT_ANCHOR,
         CURRENT_ANCHOR + pd.Timedelta(days=GOLD_PROJECTION_DAYS),
@@ -515,14 +523,14 @@ def _make_gold_chart(
     widths = {
         "1973 analog, LBMA PM fix": 2.5,
         "2006 analog, LBMA PM fix": 2.5,
-        "2026 observed, LBMA PM fix": 4.0,
+        "2026 observed, LBMA PM fix": 2.2,
         "Analog average, 1973 + 2006": 2.0,
     }
     series_order = [
-        "2026 observed, LBMA PM fix",
         "Analog average, 1973 + 2006",
         "2006 analog, LBMA PM fix",
         "1973 analog, LBMA PM fix",
+        "2026 observed, LBMA PM fix",
     ]
 
     channel_2_low = channel.line(1, projection_x)
@@ -557,18 +565,41 @@ def _make_gold_chart(
         ]
         if series.empty:
             continue
-        legend_name = name.replace(", LBMA PM fix", "")
+        legend_name = (
+            "2026 LBMA PM fix static"
+            if name == "2026 observed, LBMA PM fix"
+            else name.replace(", LBMA PM fix", "")
+        )
+        line_style = {"color": colors[name], "width": widths[name]}
+        if name == "2026 observed, LBMA PM fix":
+            line_style["dash"] = "dash"
         fig.add_trace(
             go.Scatter(
                 x=series["projection_date"],
                 y=series["scaled_price"],
                 mode="lines",
                 name=legend_name,
-                line={"color": colors[name], "width": widths[name]},
+                line=line_style,
                 hovertemplate=(
                     "%{x|%Y-%m-%d}<br>Scaled price: %{y:$,.0f}<extra>"
                     + legend_name
                     + "</extra>"
+                ),
+            )
+        )
+
+    if not live_line.empty:
+        fig.add_trace(
+            go.Scatter(
+                x=live_line["date"],
+                y=live_line["price"],
+                mode="lines",
+                name=f"2026 live {GOLD_FUTURES_SYMBOL}",
+                line={"color": "#f97316", "width": 3.4},
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}<br>"
+                    + f"{GOLD_FUTURES_SYMBOL}: "
+                    + "%{y:$,.2f}<extra>Live futures</extra>"
                 ),
             )
         )
@@ -613,9 +644,10 @@ def _make_gold_chart(
     fig.update_layout(
         template="plotly_white",
         title=(
-            "Gold analog context + live futures marker<br>"
-            f"<sup>Analog lines use legacy LBMA PM history through {pd.Timestamp(latest['date']).date()}; "
-            f"decision marker uses {GOLD_FUTURES_SYMBOL} through {pd.Timestamp(current_gold['date']).date()}</sup>"
+            "Gold analog context + 2026 live futures line<br>"
+            f"<sup>Historical analogs use legacy LBMA PM history; dashed 2026 LBMA line is static context through "
+            f"{pd.Timestamp(latest['date']).date()}; solid orange line uses {GOLD_FUTURES_SYMBOL} through "
+            f"{pd.Timestamp(current_gold['date']).date()}</sup>"
         ),
         height=760,
         hovermode="x unified",
@@ -640,11 +672,15 @@ def _make_gold_zoom_chart(
     analogs: pd.DataFrame,
     lbma: pd.DataFrame,
     channel: ChannelModel,
-    current_gold: pd.Series,
+    live_gold: pd.DataFrame,
 ) -> go.Figure:
     latest = lbma.iloc[-1]
+    current_gold = live_gold.iloc[-1]
     zoom_start = pd.Timestamp("2026-06-01")
     zoom_end = pd.Timestamp("2026-08-31")
+    live_line = live_gold[
+        (live_gold["date"] >= zoom_start) & (live_gold["date"] <= zoom_end)
+    ].copy()
     zoom_x = pd.date_range(zoom_start, zoom_end, freq="D")
     fig = go.Figure()
     colors = {
@@ -656,14 +692,14 @@ def _make_gold_zoom_chart(
     widths = {
         "1973 analog, LBMA PM fix": 2.8,
         "2006 analog, LBMA PM fix": 2.8,
-        "2026 observed, LBMA PM fix": 4.5,
+        "2026 observed, LBMA PM fix": 2.3,
         "Analog average, 1973 + 2006": 2.4,
     }
     series_order = [
-        "2026 observed, LBMA PM fix",
         "Analog average, 1973 + 2006",
         "2006 analog, LBMA PM fix",
         "1973 analog, LBMA PM fix",
+        "2026 observed, LBMA PM fix",
     ]
 
     channel_2_low = channel.line(1, zoom_x)
@@ -711,18 +747,41 @@ def _make_gold_zoom_chart(
         ]
         if series.empty:
             continue
-        legend_name = name.replace(", LBMA PM fix", "")
+        legend_name = (
+            "2026 LBMA PM fix static"
+            if name == "2026 observed, LBMA PM fix"
+            else name.replace(", LBMA PM fix", "")
+        )
+        line_style = {"color": colors[name], "width": widths[name]}
+        if name == "2026 observed, LBMA PM fix":
+            line_style["dash"] = "dash"
         fig.add_trace(
             go.Scatter(
                 x=series["projection_date"],
                 y=series["scaled_price"],
                 mode="lines",
                 name=legend_name,
-                line={"color": colors[name], "width": widths[name]},
+                line=line_style,
                 hovertemplate=(
                     "%{x|%Y-%m-%d}<br>Scaled price: %{y:$,.0f}<extra>"
                     + legend_name
                     + "</extra>"
+                ),
+            )
+        )
+
+    if not live_line.empty:
+        fig.add_trace(
+            go.Scatter(
+                x=live_line["date"],
+                y=live_line["price"],
+                mode="lines",
+                name=f"2026 live {GOLD_FUTURES_SYMBOL}",
+                line={"color": "#f97316", "width": 3.5},
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}<br>"
+                    + f"{GOLD_FUTURES_SYMBOL}: "
+                    + "%{y:$,.2f}<extra>Live futures</extra>"
                 ),
             )
         )
@@ -768,8 +827,8 @@ def _make_gold_zoom_chart(
         template="plotly_white",
         title=(
             "Gold June-August zoom<br>"
-            f"<sup>Analog context uses legacy LBMA history; live marker uses "
-            f"{GOLD_FUTURES_SYMBOL} through {pd.Timestamp(current_gold['date']).date()}</sup>"
+            f"<sup>Dashed 2026 LBMA line is static context through {pd.Timestamp(latest['date']).date()}; "
+            f"solid orange line uses {GOLD_FUTURES_SYMBOL} through {pd.Timestamp(current_gold['date']).date()}</sup>"
         ),
         height=620,
         hovermode="x unified",
@@ -843,8 +902,16 @@ def _build_silver_analogs(lbma: pd.DataFrame) -> tuple[pd.DataFrame, pd.Timestam
 def _make_silver_chart(
     analogs: pd.DataFrame,
     latest: pd.Series,
-    current_silver: pd.Series,
+    live_silver: pd.DataFrame,
 ) -> go.Figure:
+    current_silver = live_silver.iloc[-1]
+    live_line = live_silver[
+        (live_silver["date"] >= CURRENT_ANCHOR)
+        & (
+            live_silver["date"]
+            <= CURRENT_ANCHOR + pd.Timedelta(days=SILVER_PROJECTION_DAYS)
+        )
+    ].copy()
     colors = {
         "1974": "#f28e2b",
         "1980": "#8ab34f",
@@ -862,12 +929,32 @@ def _make_silver_chart(
                 x=data["projection_date"],
                 y=data["scaled_price"],
                 mode="lines",
-                name=series,
-                line={"color": colors[series], "width": 4 if series == "2026" else 2.5},
+                name="2026 LBMA silver static" if series == "2026" else series,
+                line={
+                    "color": colors[series],
+                    "width": 2.2 if series == "2026" else 2.5,
+                    **({"dash": "dash"} if series == "2026" else {}),
+                },
                 hovertemplate=(
                     "%{x|%Y-%m-%d}<br>Scaled silver: %{y:$,.2f}<extra>"
-                    + series
+                    + ("2026 LBMA silver static" if series == "2026" else series)
                     + "</extra>"
+                ),
+            )
+        )
+
+    if not live_line.empty:
+        fig.add_trace(
+            go.Scatter(
+                x=live_line["date"],
+                y=live_line["price"],
+                mode="lines",
+                name=f"2026 live {SILVER_FUTURES_SYMBOL}",
+                line={"color": "#f97316", "width": 3.5},
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}<br>"
+                    + f"{SILVER_FUTURES_SYMBOL}: "
+                    + "%{y:$,.3f}<extra>Live futures</extra>"
                 ),
             )
         )
@@ -912,9 +999,10 @@ def _make_silver_chart(
     fig.update_layout(
         template="plotly_white",
         title=(
-            "Silver correction analog context + live futures marker<br>"
-            f"<sup>Analog lines use legacy LBMA silver history through {pd.Timestamp(latest['date']).date()}; "
-            f"decision marker uses {SILVER_FUTURES_SYMBOL} through {pd.Timestamp(current_silver['date']).date()}</sup>"
+            "Silver correction analog context + 2026 live futures line<br>"
+            f"<sup>Historical analogs use legacy LBMA silver history; dashed 2026 LBMA line is static context through "
+            f"{pd.Timestamp(latest['date']).date()}; solid orange line uses {SILVER_FUTURES_SYMBOL} through "
+            f"{pd.Timestamp(current_silver['date']).date()}</sup>"
         ),
         height=760,
         hovermode="x unified",
@@ -1437,7 +1525,8 @@ def build_metals_dashboard(paths: ProjectPaths) -> list[Path]:
         f"20D {float(gsr_latest['sma20']):.2f}, 50D {float(gsr_latest['sma50']):.2f}. "
         f"Read: {gsr_state}. Treat 60 as the first rotation trigger, "
         f"58.5 as weekly leadership confirmation, and 56/53/48 as silver outperformance targets. "
-        f"The gold/silver analog panels retain LBMA only as long-history context, not as the live decision feed. "
+        f"The gold/silver analog panels retain LBMA only as long-history context; "
+        f"solid 2026 futures lines are the live source of truth. "
         f"Legacy analog context: {legacy_context['detail']}"
     )
 
@@ -1458,18 +1547,18 @@ def build_metals_dashboard(paths: ProjectPaths) -> list[Path]:
                 _section(
                     "Gold analog monitor",
                     (
-                        "Long-history analog context rebuilt from local source data, with a live "
-                        f"{GOLD_FUTURES_SYMBOL} marker added so it is not mistaken for the decision feed."
+                        "Long-history analog context rebuilt from local LBMA snapshots. The dashed 2026 "
+                        f"LBMA line is static context; the solid {GOLD_FUTURES_SYMBOL} line is the live decision feed."
                     ),
                     _plotly_div(
-                        _make_gold_chart(gold_analogs, legacy_gold, channel, current_gold)
+                        _make_gold_chart(gold_analogs, legacy_gold, channel, live_gold)
                     ),
                 ),
                 _section(
                     "Gold June-August zoom",
-                    "Short-window view for whether gold trend is still following the analog path.",
+                    f"Short-window view for whether live {GOLD_FUTURES_SYMBOL} is still following the analog path.",
                     _plotly_div(
-                        _make_gold_zoom_chart(gold_analogs, legacy_gold, channel, current_gold)
+                        _make_gold_zoom_chart(gold_analogs, legacy_gold, channel, live_gold)
                     ),
                 ),
             ]
@@ -1493,10 +1582,10 @@ def build_metals_dashboard(paths: ProjectPaths) -> list[Path]:
                 "Silver analog monitor",
                 (
                     "Silver correction analogs scaled from the 2026 peak. Use this with live GSR; "
-                    "raw silver upside matters only if it outperforms gold."
+                    f"the dashed LBMA line is context, while the solid {SILVER_FUTURES_SYMBOL} line is the live source of truth."
                 ),
                 _plotly_div(
-                    _make_silver_chart(silver_analogs, legacy_silver.iloc[-1], current_silver)
+                    _make_silver_chart(silver_analogs, legacy_silver.iloc[-1], live_silver)
                 ),
             )
         )

@@ -103,7 +103,9 @@ read from tracked snapshots in `resources/legacy/` during scheduled refreshes.
 This keeps the analog panels available even when the LBMA API is unavailable.
 To refresh those snapshots manually, set `BTCFLOOR_REFRESH_LBMA=1` before
 running `uv run scripts/build_metals_dashboard.py`, then review and commit the
-updated snapshot CSVs.
+updated snapshot CSVs. In the metals analog charts, dashed 2026 LBMA lines are
+static context; solid 2026 `GC=F` and `SI=F` lines are the live source-of-truth
+price paths.
 
 BTC/gold rotation uses processed BTC daily closes and Yahoo Finance COMEX gold
 futures (`GC=F`) on the latest shared trading date. The dashboard does not
