@@ -174,7 +174,8 @@ recent daily BTC/USD rows from CoinGecko's public `market_chart/range` endpoint.
 Generated `data_quality.md` reports the final source row counts.
 
 The Checkonchain cohort charts are parsed from their public static Plotly HTML
-pages and written to `data/processed/checkonchain_cohort_metrics.csv`. The
+pages, following their embedded iframe when Checkonchain serves a wrapper, and
+written to `data/processed/checkonchain_cohort_metrics.csv`. The
 current dashboard uses STH-MVRV, STH-MVRV Z-score, LTH-MVRV, LTH-SOPR, LTH
 realised price, STH realised price, Cointime Price, and LTH realised-loss
 impulse metrics. Classic Woo/Bitbo CVDD is added when an authorized Bitbo API

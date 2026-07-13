@@ -93,7 +93,9 @@ pipeline appends only missing recent BTC/USD daily rows from CoinGecko's public
 `market_chart/range` endpoint. Daily rows are UTC-dated, so Europe/Stockholm
 can be on a new calendar day before a new UTC daily close exists.
 
-Checkonchain cohort charts are parsed from public static Plotly pages.
+Checkonchain cohort charts are parsed from public static Plotly pages and the
+pipeline follows their embedded iframe payload when Checkonchain serves a
+wrapper page.
 Classic CVDD uses Bitbo when `BITBO_API_KEY` is configured; otherwise the
 dashboard labels the Looknode public endpoint as a third-party fallback.
 

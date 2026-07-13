@@ -93,7 +93,9 @@ staged value/failed-breakdown setup, not as confirmed trend continuation.
 ## Checkonchain cohort layer
 
 The on-chain cohort layer is pulled from Checkonchain's public static Plotly
-charts during `uv run scripts/update_daily.py`. The core cohort metrics are:
+charts during `uv run scripts/update_daily.py`. Some source pages are iframe
+wrappers, so the pipeline follows the embedded public chart payload. The core
+cohort metrics are:
 
 - STH-MVRV and STH-MVRV Z-score: short-holder cost-basis stress.
 - STH price-equivalent Z-score bands: tactical stress zones around current spot.

@@ -3,7 +3,9 @@ from __future__ import annotations
 import base64
 import json
 import os
+from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urljoin
 
 import matplotlib
 
@@ -77,12 +79,50 @@ def _extract_plotly_traces(html: str) -> list[dict[str, object]]:
     return traces
 
 
-def fetch_checkonchain_chart(url: str) -> pd.DataFrame:
-    response = requests.get(url, headers={"User-Agent": "btcfloor/0.1"}, timeout=45)
-    response.raise_for_status()
+class _IframeSourceParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.sources: list[str] = []
 
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "iframe":
+            return
+        source = dict(attrs).get("src")
+        if source:
+            self.sources.append(source)
+
+
+def _iframe_sources(html: str, base_url: str) -> list[str]:
+    parser = _IframeSourceParser()
+    parser.feed(html)
+    parser.close()
+    return [urljoin(base_url, source) for source in parser.sources]
+
+
+def _fetch_chart_payload_html(url: str) -> str:
+    headers = {"User-Agent": "btcfloor/0.1"}
+    response = requests.get(url, headers=headers, timeout=45)
+    response.raise_for_status()
+    if "Plotly.newPlot" in response.text:
+        return response.text
+
+    sources = _iframe_sources(response.text, response.url)
+    for source in sources:
+        embedded = requests.get(source, headers=headers, timeout=45)
+        embedded.raise_for_status()
+        if "Plotly.newPlot" in embedded.text:
+            return embedded.text
+
+    if sources:
+        raise ValueError(
+            "No Plotly.newPlot payload found in Checkonchain page or its embedded iframe"
+        )
+    raise ValueError("No Plotly.newPlot payload or embedded iframe found")
+
+
+def fetch_checkonchain_chart(url: str) -> pd.DataFrame:
     merged: pd.DataFrame | None = None
-    for trace in _extract_plotly_traces(response.text):
+    for trace in _extract_plotly_traces(_fetch_chart_payload_html(url)):
         name = str(trace.get("name", "unnamed")).strip()
         if not name:
             continue
