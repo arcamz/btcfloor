@@ -43,6 +43,24 @@ def channel_from_rejection(frame: pd.DataFrame) -> tuple[pd.Series, pd.Series, p
     )
 
 
+def first_sma50_loss_after_rejection(
+    daily: pd.DataFrame, rejection_date: pd.Timestamp
+) -> pd.Series | None:
+    """Return the first close below the 50-day SMA, if that event has occurred.
+
+    A 200-day-SMA rejection does not guarantee a subsequent 50-day-SMA loss.  The
+    chart should continue to render while the post-rejection price action remains
+    above the 50-day average.
+    """
+    after_rejection = daily.loc[daily["date"] >= rejection_date]
+    sma50_losses = after_rejection.loc[
+        after_rejection["price_usd"] < after_rejection["sma50"]
+    ]
+    if sma50_losses.empty:
+        return None
+    return sma50_losses.iloc[0]
+
+
 def write_plot(paths: ProjectPaths) -> Path:
     daily = load_chart_prices(paths)
     model = giovanni_power_law_floor_model()
@@ -71,10 +89,7 @@ def write_plot(paths: ProjectPaths) -> Path:
     daily.loc[post_rejection.index, "channel_upper"] = upper
     daily.loc[post_rejection.index, "channel_lower"] = lower
 
-    after_rejection = daily.loc[daily["date"] >= rejection_date].copy()
-    sma50_loss = after_rejection.loc[
-        after_rejection["price_usd"] < after_rejection["sma50"]
-    ].iloc[0]
+    sma50_loss = first_sma50_loss_after_rejection(daily, rejection_date)
     latest = daily.iloc[-1]
 
     view = daily.loc[daily["date"] >= START_DATE].copy()
@@ -123,9 +138,13 @@ def write_plot(paths: ProjectPaths) -> Path:
     markers = [
         (BREACH_DATE, "future-floor breach", "#d94841", "v"),
         (rejection_date, "200SMA rejection", "#7c3aed", "X"),
-        (pd.Timestamp(sma50_loss["date"]), "50SMA loss", "#2b8a5f", "v"),
         (pd.Timestamp(latest["date"]), "latest/provisional", "#111827", "o"),
     ]
+    if sma50_loss is not None:
+        markers.insert(
+            2,
+            (pd.Timestamp(sma50_loss["date"]), "50SMA loss", "#2b8a5f", "v"),
+        )
     for date, label, color, marker in markers:
         row = daily.loc[daily["date"].eq(date)].iloc[0]
         ax_price.scatter(
@@ -242,7 +261,9 @@ def write_plot(paths: ProjectPaths) -> Path:
                 "giovanni_same_day_floor_usd": latest_same_floor,
                 "future_floor_breach_date": BREACH_DATE,
                 "rejection_date": rejection_date,
-                "sma50_loss_date": pd.Timestamp(sma50_loss["date"]),
+                "sma50_loss_date": (
+                    pd.Timestamp(sma50_loss["date"]) if sma50_loss is not None else pd.NaT
+                ),
             }
         ]
     )
