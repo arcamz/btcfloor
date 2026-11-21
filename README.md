@@ -77,6 +77,15 @@ Then open the primary dashboards:
 - `reports/interactive/metals_relative_dashboard.html`
 - `reports/interactive/pipeline_health_dashboard.html`
 
+Build and open the standalone BTC daily market dashboard with
+`uv run scripts/build_daily_market_dashboard.py` and
+`reports/interactive/btc_daily_market_dashboard.html`.
+It embeds its data and TradingView Lightweight Charts 5.2.0 for offline use.
+Daily BTC/USD candles use completed Bitstamp sessions. Holder metrics reuse the
+existing daily Checkonchain cohort data and source-labelled CVDD fallback.
+Add `--refresh-cohorts` to refresh those inputs as well. The static site
+packager includes the page when it has been generated.
+
 The GitHub Pages project site is expected at:
 
 ```text
