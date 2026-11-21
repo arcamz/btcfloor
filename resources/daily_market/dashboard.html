@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BTC Market &amp; On-chain · BTC Floor</title>
+  <style>$styles</style>
+</head>
+<body>
+  <main>
+    <header class="page-heading">
+      <div>
+        <p class="eyebrow">BTC Floor · Market history</p>
+        <h1>BTC Market &amp; On-chain</h1>
+        <p id="coverage" class="muted"></p>
+      </div>
+      <button id="theme" type="button">Light theme</button>
+    </header>
+    <section id="workspace" aria-label="BTC chart workspace">
+      <div class="toolbar">
+        <label class="field"><span>Candles</span><select id="interval">
+          <option value="daily">Daily</option><option value="weekly">Weekly</option>
+        </select></label>
+        <details id="metric-menu" class="field">
+          <summary><span>Indicators &amp; metrics</span><strong id="metric-count"></strong></summary>
+          <div id="metric-options" class="metric-options"></div>
+        </details>
+        <fieldset class="range-control">
+          <legend>History range</legend>
+          <div id="ranges" class="button-group">
+            <button type="button" data-range="183">6M</button>
+            <button type="button" data-range="365">1Y</button>
+            <button type="button" data-range="1096">3Y</button>
+            <button type="button" data-range="1826">5Y</button>
+            <button type="button" data-range="all">All</button>
+          </div>
+        </fieldset>
+        <label class="cycle-control"><input id="cycles" type="checkbox" checked> Cycle lows</label>
+      </div>
+      <div class="chart-card">
+        <div class="chart-bar">
+          <div class="market-readout">
+            <span id="date-label" class="eyebrow">BTC/USD</span>
+            <strong id="close"></strong>
+            <span id="ohlc" class="muted"></span>
+          </div>
+          <div class="button-group chart-actions">
+            <button id="log" aria-label="Toggle BTC price log scale" aria-pressed="false" type="button">Log</button>
+            <button id="reset" type="button">Reset chart</button>
+            <button id="maximize" type="button">Maximize</button>
+            <button id="export" type="button">Export PNG</button>
+          </div>
+        </div>
+        <div id="plot">
+          <div id="chart" aria-label="BTC candles with selected indicators"></div>
+          <div id="chart-overlay" aria-hidden="true"></div>
+        </div>
+        <div id="readout" class="metric-readout" aria-label="Selected metric values"></div>
+      </div>
+    </section>
+    <details class="notes">
+      <summary>Data and indicator definitions</summary>
+      <p>BTC/USD candles use completed UTC sessions from <a href="https://www.bitstamp.net/api/#tag/Market-info">Bitstamp</a>. Weekly bars use Monday–Sunday UTC and are marked partial until all seven days are available.</p>
+      <p>SMA40 and SMA200 use daily closes. The Z-score bands use EMA27 ± 1.7 times the 27-day population standard deviation, and the hover readout includes the price Z-score. SMA50w uses completed weeks. Weekly charts sample daily indicators and on-chain series on the last candle date of each week.</p>
+      <p>Holder metrics, stress bands and Cointime Price use BTC Floor’s <a href="https://charts.checkonchain.com/">Checkonchain</a> series. CVDD identifies its provider in the checklist. Values are aligned by UTC date, with missing observations left blank.</p>
+    </details>
+    <footer><a href="https://www.tradingview.com/">TradingView Lightweight Charts™</a></footer>
+  </main>
+  <script id="market-data" type="application/json">$payload</script>
+  <script type="text/plain" id="chart-library-license">$license_text</script>
+  <script>$vendor</script>
+  <script>$script</script>
+</body>
+</html>

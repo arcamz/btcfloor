@@ -101,6 +101,14 @@ Current fields used in dashboards include:
 These metrics are strategy context, not floor-model inputs. They help separate
 "value zone" from "final capitulation" evidence.
 
+The standalone daily market dashboard uses Bitstamp BTC/USD OHLC for its
+candles and technical overlays. It includes completed UTC days and aligns
+holder metrics to those dates without filling gaps. Weekly candles aggregate
+Monday through Sunday, with shorter weeks labelled as partial. SMA40 and
+SMA200 use daily closes. Price Z-score bands use EMA27 plus or minus 1.7
+population standard deviations over 27 daily closes. SMA50w uses the last
+50 consecutive completed weeks. These are chart inputs only.
+
 ## Metals Relative Strength
 
 The metals dashboard uses Yahoo Finance COMEX futures (`GC=F`, `SI=F`) for
